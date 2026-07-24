@@ -1,0 +1,14 @@
+# macOS
+.DS_Store
+
+# Claude
+.claude/
+
+# Large source files (not needed for deployment)
+*.svg
+LOGO*.png
+VISUAL.png
+logo-*.png
+
+# Concept files (keeping only final)
+concept*.html
