@@ -20,7 +20,7 @@ const CONFIG = {
   CALENDAR_ID: 'dogatelierostrava@gmail.com',
 
   // Email addresses for alerts
-  ALERT_EMAILS: ['dogatelierostrava@gmail.com', 'staffa.ppc@gmail.com'],
+  ALERT_EMAILS: ['dogatelierostrava@gmail.com', 'staffa.ppc@gmail.com', 'p.holla@email.cz'],
 
   // Business hours (24h format)
   BUSINESS_HOURS: {
@@ -294,7 +294,7 @@ function logToSheet(data) {
  * Send alert emails to salon owners
  */
 function sendAlertEmails(data) {
-  const subject = `🐕 Nová rezervace - ${data.firstName} ${data.lastName}`;
+  const subject = '\uD83D\uDC3E Nová rezervace - ' + data.firstName + ' ' + data.lastName;
 
   const htmlBody = `
     <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
@@ -370,7 +370,7 @@ function sendCustomerConfirmation(data) {
       </p>
       <ul>
         <li>Email: <a href="mailto:dogatelierostrava@gmail.com">dogatelierostrava@gmail.com</a></li>
-        <li>Telefon: [DOPLNIT TELEFON]</li>
+        <li>Telefon: <a href="tel:+420736477981">+420 736 477 981</a></li>
       </ul>
 
       <p>Těšíme se na Vás!</p>
