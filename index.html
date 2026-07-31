@@ -612,6 +612,126 @@
             font-size: 0.85rem;
         }
 
+        .footer-content {
+            max-width: 1200px;
+            margin: 0 auto;
+        }
+
+        .footer-links {
+            margin-top: 1rem;
+            display: flex;
+            justify-content: center;
+            gap: 2rem;
+            flex-wrap: wrap;
+        }
+
+        .footer-links a {
+            color: rgba(255,255,255,0.8);
+            text-decoration: none;
+            transition: color 0.3s;
+        }
+
+        .footer-links a:hover {
+            color: white;
+        }
+
+        /* Legal Modal */
+        .legal-modal-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0,0,0,0.7);
+            z-index: 2000;
+            display: none;
+            justify-content: center;
+            align-items: center;
+            padding: 2rem;
+        }
+
+        .legal-modal-overlay.active {
+            display: flex;
+        }
+
+        .legal-modal {
+            background: white;
+            max-width: 800px;
+            width: 100%;
+            max-height: 85vh;
+            border-radius: 8px;
+            overflow: hidden;
+            display: flex;
+            flex-direction: column;
+        }
+
+        .legal-modal-header {
+            padding: 1.5rem 2rem;
+            background: var(--color-surface);
+            border-bottom: 1px solid #eee;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .legal-modal-header h2 {
+            font-family: 'Playfair Display', serif;
+            font-size: 1.5rem;
+            margin: 0;
+            color: var(--color-primary);
+        }
+
+        .legal-modal-close {
+            background: none;
+            border: none;
+            font-size: 2rem;
+            cursor: pointer;
+            color: #666;
+            line-height: 1;
+        }
+
+        .legal-modal-body {
+            padding: 2rem;
+            overflow-y: auto;
+            line-height: 1.8;
+            color: #444;
+        }
+
+        .legal-modal-body h3 {
+            font-size: 1.1rem;
+            color: var(--color-primary);
+            margin: 1.5rem 0 0.75rem 0;
+        }
+
+        .legal-modal-body h3:first-child {
+            margin-top: 0;
+        }
+
+        .legal-modal-body p {
+            margin-bottom: 1rem;
+        }
+
+        .legal-modal-body ul {
+            margin: 0.5rem 0 1rem 1.5rem;
+        }
+
+        .legal-modal-body li {
+            margin-bottom: 0.5rem;
+        }
+
+        @media (max-width: 600px) {
+            .footer-links {
+                flex-direction: column;
+                gap: 0.75rem;
+            }
+            .legal-modal-overlay {
+                padding: 1rem;
+            }
+            .legal-modal-body {
+                padding: 1.5rem;
+            }
+        }
+
         /* Responsive */
         @media (max-width: 1024px) {
             .hero {
@@ -1531,7 +1651,14 @@
 
     <!-- Footer -->
     <footer>
-        <p>© 2024 DogAtelier. Všechna práva vyhrazena.</p>
+        <div class="footer-content">
+            <p>© 2025 DogAtelier. Všechna práva vyhrazena.</p>
+            <div class="footer-links">
+                <a href="#" onclick="openLegalModal('privacy'); return false;">Ochrana osobních údajů</a>
+                <a href="#" onclick="openLegalModal('cookies'); return false;">Cookies</a>
+                <a href="#" onclick="openLegalModal('terms'); return false;">Obchodní podmínky</a>
+            </div>
+        </div>
     </footer>
 
     <script>
@@ -2211,6 +2338,256 @@
     document.addEventListener('keydown', function(e) {
         if (e.key === 'Escape' && document.getElementById('cookieModal').classList.contains('active')) {
             closeCookieModal();
+        }
+    });
+    </script>
+
+    <!-- Legal Modals -->
+    <!-- Privacy Policy Modal -->
+    <div id="privacyModal" class="legal-modal-overlay">
+        <div class="legal-modal">
+            <div class="legal-modal-header">
+                <h2>Ochrana osobních údajů</h2>
+                <button class="legal-modal-close" onclick="closeLegalModal('privacy')">&times;</button>
+            </div>
+            <div class="legal-modal-body">
+                <p><strong>Poslední aktualizace:</strong> 1. 1. 2025</p>
+
+                <h3>1. Správce osobních údajů</h3>
+                <p>
+                    Správcem osobních údajů je Petra Hollá, provozovatel salonu DogAtelier<br>
+                    Adresa: Dr. Martínka 1166/69, 700 30 Ostrava – Hrabůvka<br>
+                    Email: dogatelierostrava@gmail.com<br>
+                    Telefon: +420 736 477 981
+                </p>
+
+                <h3>2. Jaké údaje zpracováváme</h3>
+                <p>V rámci poskytování služeb zpracováváme následující osobní údaje:</p>
+                <ul>
+                    <li><strong>Identifikační údaje:</strong> jméno, příjmení</li>
+                    <li><strong>Kontaktní údaje:</strong> e-mailová adresa, telefonní číslo</li>
+                    <li><strong>Údaje o rezervaci:</strong> datum a čas návštěvy, zvolená služba, plemeno psa, poznámky</li>
+                </ul>
+
+                <h3>3. Účel zpracování</h3>
+                <p>Vaše údaje zpracováváme za účelem:</p>
+                <ul>
+                    <li>Vytvoření a správy rezervace termínu</li>
+                    <li>Komunikace ohledně rezervace (potvrzení, připomínky, změny)</li>
+                    <li>Poskytnutí objednaných služeb</li>
+                    <li>Vedení evidence klientů pro účetní a daňové účely</li>
+                </ul>
+
+                <h3>4. Právní základ zpracování</h3>
+                <p>Osobní údaje zpracováváme na základě:</p>
+                <ul>
+                    <li><strong>Plnění smlouvy</strong> – zpracování je nezbytné pro poskytnutí služeb, které jste si objednali</li>
+                    <li><strong>Oprávněného zájmu</strong> – pro komunikaci s klienty a zlepšování služeb</li>
+                    <li><strong>Zákonné povinnosti</strong> – vedení účetní evidence</li>
+                </ul>
+
+                <h3>5. Doba uchování údajů</h3>
+                <p>Vaše údaje uchováváme po dobu nezbytně nutnou:</p>
+                <ul>
+                    <li>Údaje o rezervacích: 3 roky od poslední návštěvy</li>
+                    <li>Účetní doklady: 10 let dle zákonných požadavků</li>
+                </ul>
+
+                <h3>6. Vaše práva</h3>
+                <p>Máte právo:</p>
+                <ul>
+                    <li>Na přístup ke svým osobním údajům</li>
+                    <li>Na opravu nepřesných údajů</li>
+                    <li>Na výmaz údajů (právo být zapomenut)</li>
+                    <li>Na omezení zpracování</li>
+                    <li>Na přenositelnost údajů</li>
+                    <li>Vznést námitku proti zpracování</li>
+                    <li>Podat stížnost u Úřadu pro ochranu osobních údajů (www.uoou.cz)</li>
+                </ul>
+
+                <h3>7. Zabezpečení údajů</h3>
+                <p>
+                    Vaše údaje chráníme pomocí odpovídajících technických a organizačních opatření.
+                    Přístup k údajům mají pouze oprávněné osoby.
+                </p>
+
+                <h3>8. Kontakt</h3>
+                <p>
+                    V případě dotazů ohledně zpracování osobních údajů nás kontaktujte na:
+                    <a href="mailto:dogatelierostrava@gmail.com">dogatelierostrava@gmail.com</a>
+                </p>
+            </div>
+        </div>
+    </div>
+
+    <!-- Cookies Modal -->
+    <div id="cookiesModal" class="legal-modal-overlay">
+        <div class="legal-modal">
+            <div class="legal-modal-header">
+                <h2>Zásady používání cookies</h2>
+                <button class="legal-modal-close" onclick="closeLegalModal('cookies')">&times;</button>
+            </div>
+            <div class="legal-modal-body">
+                <p><strong>Poslední aktualizace:</strong> 1. 1. 2025</p>
+
+                <h3>1. Co jsou cookies</h3>
+                <p>
+                    Cookies jsou malé textové soubory, které se ukládají do vašeho prohlížeče při návštěvě webových stránek.
+                    Pomáhají webu zapamatovat si vaše preference a zlepšit uživatelský zážitek.
+                </p>
+
+                <h3>2. Jaké cookies používáme</h3>
+
+                <p><strong>Nezbytné cookies</strong></p>
+                <p>
+                    Tyto cookies jsou nutné pro základní fungování webu. Zahrnují např. zapamatování souhlasu s cookies.
+                    Bez těchto cookies by web nemohl správně fungovat.
+                </p>
+
+                <p><strong>Funkční cookies</strong></p>
+                <p>
+                    Slouží k zapamatování vašich preferencí, jako je vybraný termín v rezervačním systému.
+                </p>
+
+                <h3>3. Cookies třetích stran</h3>
+                <p>
+                    Na našich stránkách momentálně nepoužíváme analytické ani marketingové cookies třetích stran.
+                </p>
+
+                <h3>4. Jak spravovat cookies</h3>
+                <p>
+                    Cookies můžete spravovat v nastavení svého prohlížeče. Můžete je blokovat nebo mazat.
+                    Upozorňujeme, že blokování některých cookies může ovlivnit funkčnost webu.
+                </p>
+                <p>Návody pro nejpoužívanější prohlížeče:</p>
+                <ul>
+                    <li><a href="https://support.google.com/chrome/answer/95647" target="_blank" rel="noopener">Google Chrome</a></li>
+                    <li><a href="https://support.mozilla.org/cs/kb/cookies-informace-ktere-si-webove-stranky-ukladaji" target="_blank" rel="noopener">Mozilla Firefox</a></li>
+                    <li><a href="https://support.apple.com/cs-cz/guide/safari/sfri11471/mac" target="_blank" rel="noopener">Safari</a></li>
+                    <li><a href="https://support.microsoft.com/cs-cz/microsoft-edge/odstran%C4%9Bn%C3%AD-soubor%C5%AF-cookie-v-microsoft-edge-63947406-40ac-c3b8-57b9-2a946a29ae09" target="_blank" rel="noopener">Microsoft Edge</a></li>
+                </ul>
+
+                <h3>5. Kontakt</h3>
+                <p>
+                    Máte-li dotazy ohledně cookies, kontaktujte nás na:
+                    <a href="mailto:dogatelierostrava@gmail.com">dogatelierostrava@gmail.com</a>
+                </p>
+            </div>
+        </div>
+    </div>
+
+    <!-- Terms Modal -->
+    <div id="termsModal" class="legal-modal-overlay">
+        <div class="legal-modal">
+            <div class="legal-modal-header">
+                <h2>Obchodní podmínky</h2>
+                <button class="legal-modal-close" onclick="closeLegalModal('terms')">&times;</button>
+            </div>
+            <div class="legal-modal-body">
+                <p><strong>Poslední aktualizace:</strong> 1. 1. 2025</p>
+
+                <h3>1. Úvodní ustanovení</h3>
+                <p>
+                    Tyto obchodní podmínky upravují práva a povinnosti mezi provozovatelem salonu DogAtelier
+                    (dále jen „salon") a klientem při poskytování groomerských služeb.
+                </p>
+                <p>
+                    <strong>Provozovatel:</strong> Petra Hollá<br>
+                    <strong>Provozovna:</strong> Dr. Martínka 1166/69, 700 30 Ostrava – Hrabůvka<br>
+                    <strong>Kontakt:</strong> dogatelierostrava@gmail.com, +420 736 477 981
+                </p>
+
+                <h3>2. Rezervace termínu</h3>
+                <ul>
+                    <li>Rezervaci lze provést online přes webový formulář, telefonicky nebo e-mailem.</li>
+                    <li>Rezervace je závazná po jejím potvrzení ze strany salonu.</li>
+                    <li>Při rezervaci uveďte pravdivé údaje o sobě a svém pejskovi.</li>
+                </ul>
+
+                <h3>3. Zrušení a změna rezervace</h3>
+                <ul>
+                    <li>Rezervaci lze zrušit nebo změnit nejpozději 24 hodin předem.</li>
+                    <li>Při opakovaném nedostavení se bez omluvy si salon vyhrazuje právo odmítnout další rezervace.</li>
+                    <li>Změnu termínu nám prosím oznamte telefonicky nebo e-mailem.</li>
+                </ul>
+
+                <h3>4. Průběh návštěvy</h3>
+                <ul>
+                    <li>Dostavte se prosím včas na domluvený termín.</li>
+                    <li>Pejsek by měl být před návštěvou vyvenčen.</li>
+                    <li>Informujte nás o zdravotním stavu pejska, alergiích či zvláštnostech v chování.</li>
+                    <li>Při první návštěvě probíhá krátká konzultace o potřebách a přáních.</li>
+                </ul>
+
+                <h3>5. Zdravotní stav pejska</h3>
+                <ul>
+                    <li>Salon nepřijímá psy s infekčními nebo parazitárními onemocněními.</li>
+                    <li>U psů se zdravotními problémy může být vyžadováno potvrzení od veterináře.</li>
+                    <li>Očkování pejska musí být platné.</li>
+                </ul>
+
+                <h3>6. Ceny a platba</h3>
+                <ul>
+                    <li>Ceny služeb jsou uvedeny v ceníku na webových stránkách.</li>
+                    <li>Konečná cena závisí na velikosti psa, stavu srsti a náročnosti úpravy.</li>
+                    <li>Platba probíhá v hotovosti nebo kartou po dokončení služby.</li>
+                    <li>Při výrazně zacuchané nebo zanedbané srsti může být účtován příplatek.</li>
+                </ul>
+
+                <h3>7. Odpovědnost</h3>
+                <ul>
+                    <li>Salon nenese odpovědnost za zdravotní komplikace, které nebyly předem oznámeny.</li>
+                    <li>Při agresivním chování pejska může být služba přerušena bez nároku na vrácení platby.</li>
+                    <li>Salon neodpovídá za ztrátu osobních věcí ponechaných v prostorách salonu.</li>
+                </ul>
+
+                <h3>8. Reklamace</h3>
+                <p>
+                    Případné reklamace řešíme individuálně. Kontaktujte nás prosím co nejdříve po návštěvě
+                    na e-mailu nebo telefonicky.
+                </p>
+
+                <h3>9. Závěrečná ustanovení</h3>
+                <p>
+                    Vstupem do salonu a využitím služeb klient potvrzuje, že se seznámil s těmito obchodními podmínkami
+                    a souhlasí s nimi. Salon si vyhrazuje právo obchodní podmínky měnit.
+                </p>
+            </div>
+        </div>
+    </div>
+
+    <script>
+    // Legal modal functions
+    function openLegalModal(type) {
+        const modalId = type + 'Modal';
+        document.getElementById(modalId).classList.add('active');
+        document.body.style.overflow = 'hidden';
+    }
+
+    function closeLegalModal(type) {
+        const modalId = type + 'Modal';
+        document.getElementById(modalId).classList.remove('active');
+        document.body.style.overflow = '';
+    }
+
+    // Close on overlay click
+    ['privacyModal', 'cookiesModal', 'termsModal'].forEach(id => {
+        document.getElementById(id).addEventListener('click', function(e) {
+            if (e.target === this) {
+                const type = id.replace('Modal', '');
+                closeLegalModal(type);
+            }
+        });
+    });
+
+    // Close on Escape key
+    document.addEventListener('keydown', function(e) {
+        if (e.key === 'Escape') {
+            ['privacy', 'cookies', 'terms'].forEach(type => {
+                if (document.getElementById(type + 'Modal').classList.contains('active')) {
+                    closeLegalModal(type);
+                }
+            });
         }
     });
     </script>

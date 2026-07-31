@@ -293,7 +293,7 @@ function logToSheet(data) {
  * Send alert emails to salon owners
  */
 function sendAlertEmails(data) {
-  const subject = '\uD83D\uDC3E Nová rezervace - ' + data.firstName + ' ' + data.lastName;
+  const subject = 'Nová rezervace - ' + data.firstName + ' ' + data.lastName;
 
   const htmlBody = `
     <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
