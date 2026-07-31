@@ -1416,14 +1416,14 @@
                 </div>
                 <div class="pricing-row">
                     <span class="pricing-service">Stříhání drápků</span>
-                    <span class="pricing-price">250 Kč</span>
+                    <span class="pricing-price">200 Kč</span>
                 </div>
                 <div class="pricing-row">
                     <span class="pricing-service">Čištění uší</span>
                     <span class="pricing-price">200 Kč</span>
                 </div>
                 <div class="pricing-row">
-                    <span class="pricing-service">Ozonová terapie</span>
+                    <span class="pricing-service">Ozonová terapie <em style="color: #7A8D80; font-weight: 400;">(připravujeme)</em></span>
                     <span class="pricing-price">od 300 Kč</span>
                 </div>
                 <div class="pricing-row">
@@ -1443,6 +1443,7 @@
         <div class="ozone-inner">
             <h2>Ozon Spa</h2>
             <p class="subtitle">Regenerační péče pro zdravou pokožku a krásnou srst</p>
+            <p style="background: #f5f1e8; padding: 1rem; border-radius: 4px; color: #7A8D80; font-weight: 600; margin-bottom: 2rem;">🔜 Službu právě připravujeme – brzy bude k dispozici!</p>
 
             <div class="ozone-content">
                 <p>
@@ -1581,15 +1582,27 @@
                             </div>
 
                             <div class="form-group">
-                                <label for="service">Služba</label>
-                                <select id="service" name="service">
-                                    <option value="Kompletní úprava">Kompletní úprava</option>
+                                <label for="service">Služba *</label>
+                                <select id="service" name="service" required>
+                                    <option value="">Vyberte službu...</option>
+                                    <option value="Kompletní úprava - malý pes">Kompletní úprava – malý pes (do 5 kg)</option>
+                                    <option value="Kompletní úprava - střední pes">Kompletní úprava – střední pes (5–15 kg)</option>
+                                    <option value="Kompletní úprava - velký pes">Kompletní úprava – velký pes (nad 15 kg)</option>
                                     <option value="Stříhání">Stříhání</option>
                                     <option value="Koupání a foukání">Koupání a foukání</option>
                                     <option value="Trimování">Trimování</option>
-                                    <option value="Ozonová terapie">Ozonová terapie</option>
                                     <option value="Konzultace">Konzultace</option>
                                 </select>
+                            </div>
+
+                            <div class="form-group">
+                                <label for="breed">Plemeno psa</label>
+                                <input type="text" id="breed" name="breed" placeholder="např. pudl, maltézák, zlatý retrívr...">
+                            </div>
+
+                            <div class="form-group">
+                                <label for="notes">Poznámky</label>
+                                <textarea id="notes" name="notes" rows="3" placeholder="Např. poprvé v salonu, zacuchaná srst, bojácný pejsek, speciální požadavky..." style="resize: vertical; min-height: 80px;"></textarea>
                             </div>
 
                             <div id="selectedDatetime" class="selected-datetime" style="display: none;">
@@ -1845,13 +1858,15 @@
         const lastName = document.getElementById('lastName').value.trim();
         const email = document.getElementById('email').value.trim();
         const phone = document.getElementById('phone').value.trim();
+        const service = document.getElementById('service').value;
 
-        btn.disabled = !(firstName && lastName && email && phone && selectedSlot);
+        btn.disabled = !(firstName && lastName && email && phone && service && selectedSlot);
     }
 
     // Add input listeners for form validation
-    ['firstName', 'lastName', 'email', 'phone'].forEach(id => {
+    ['firstName', 'lastName', 'email', 'phone', 'service'].forEach(id => {
         document.getElementById(id).addEventListener('input', updateSubmitButton);
+        document.getElementById(id).addEventListener('change', updateSubmitButton);
     });
 
     document.getElementById('reservationForm').addEventListener('submit', async function(e) {
@@ -1868,6 +1883,8 @@
             email: document.getElementById('email').value.trim(),
             phone: document.getElementById('phone').value.trim(),
             service: document.getElementById('service').value,
+            breed: document.getElementById('breed').value.trim(),
+            notes: document.getElementById('notes').value.trim(),
             datetime: document.getElementById('selectedDatetimeValue').value
         };
 

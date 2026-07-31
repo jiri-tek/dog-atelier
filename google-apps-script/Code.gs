@@ -22,17 +22,11 @@ const CONFIG = {
   // Email addresses for alerts
   ALERT_EMAILS: ['dogatelierostrava@gmail.com', 'staffa.ppc@gmail.com', 'p.holla@email.cz'],
 
-  // Business hours (24h format)
-  BUSINESS_HOURS: {
-    start: 9,  // 9:00
-    end: 18    // 18:00
-  },
+  // Fixed appointment times (hours in 24h format)
+  APPOINTMENT_TIMES: [9, 12, 15],  // 9:00, 12:00, 15:00
 
-  // Slot duration in minutes
-  SLOT_DURATION: 90,
-
-  // Buffer time between appointments in minutes
-  BUFFER_TIME: 30,
+  // Slot duration in minutes (used for calendar event length)
+  SLOT_DURATION: 150,  // 2.5 hours between appointments
 
   // Days to show in advance
   DAYS_AHEAD: 30,
@@ -92,6 +86,7 @@ function jsonResponse(data) {
 
 /**
  * Get available time slots for the next X days
+ * Uses fixed appointment times: 9:00, 12:00, 15:00
  */
 function getAvailableSlots() {
   const calendar = CalendarApp.getCalendarById(CONFIG.CALENDAR_ID);
@@ -101,7 +96,6 @@ function getAvailableSlots() {
 
   const slots = [];
   const now = new Date();
-  const slotDuration = CONFIG.SLOT_DURATION + CONFIG.BUFFER_TIME;
 
   // Start from tomorrow
   const startDate = new Date(now);
@@ -128,21 +122,16 @@ function getAvailableSlots() {
       continue;
     }
 
-    // Generate time slots for this day
-    const dayStart = new Date(d);
-    dayStart.setHours(CONFIG.BUSINESS_HOURS.start, 0, 0, 0);
+    // Check each fixed appointment time
+    CONFIG.APPOINTMENT_TIMES.forEach(hour => {
+      const slotStart = new Date(d);
+      slotStart.setHours(hour, 0, 0, 0);
 
-    const dayEnd = new Date(d);
-    dayEnd.setHours(CONFIG.BUSINESS_HOURS.end, 0, 0, 0);
-
-    for (let slotStart = new Date(dayStart); slotStart.getTime() + (CONFIG.SLOT_DURATION * 60000) <= dayEnd.getTime(); slotStart.setMinutes(slotStart.getMinutes() + slotDuration)) {
       const slotEnd = new Date(slotStart.getTime() + CONFIG.SLOT_DURATION * 60000);
 
       // Check if slot conflicts with any existing event
       const isAvailable = !busyTimes.some(busy => {
-        const bufferStart = slotStart.getTime();
-        const bufferEnd = slotEnd.getTime() + (CONFIG.BUFFER_TIME * 60000);
-        return (bufferStart < busy.end && bufferEnd > busy.start);
+        return (slotStart.getTime() < busy.end && slotEnd.getTime() > busy.start);
       });
 
       if (isAvailable) {
@@ -155,7 +144,7 @@ function getAvailableSlots() {
           dayName: getDayName(slotStart.getDay())
         });
       }
-    }
+    });
   }
 
   return slots;
@@ -175,10 +164,10 @@ function getDayName(dayIndex) {
  * Create a new reservation
  */
 function createReservation(data) {
-  const { firstName, lastName, email, phone, datetime, service } = data;
+  const { firstName, lastName, email, phone, datetime, service, breed, notes } = data;
 
   // Validate required fields
-  if (!firstName || !lastName || !email || !phone || !datetime) {
+  if (!firstName || !lastName || !email || !phone || !datetime || !service) {
     return { success: false, error: 'Vyplňte prosím všechna povinná pole.' };
   }
 
@@ -195,12 +184,14 @@ function createReservation(data) {
   }
 
   // Create calendar event
-  const eventTitle = `🐕 ${firstName} ${lastName} - ${service || 'Rezervace'}`;
+  const eventTitle = `🐕 ${firstName} ${lastName} - ${service}`;
   const eventDescription = `
 Klient: ${firstName} ${lastName}
 Email: ${email}
 Telefon: ${phone}
-Služba: ${service || 'Neuvedeno'}
+Služba: ${service}
+Plemeno: ${breed || 'Neuvedeno'}
+Poznámky: ${notes || 'Žádné'}
 
 Rezervováno přes web: ${new Date().toLocaleString('cs-CZ')}
   `.trim();
@@ -219,7 +210,9 @@ Rezervováno přes web: ${new Date().toLocaleString('cs-CZ')}
     phone,
     date: Utilities.formatDate(reservationDate, Session.getScriptTimeZone(), 'd.M.yyyy'),
     time: Utilities.formatDate(reservationDate, Session.getScriptTimeZone(), 'H:mm'),
-    service: service || 'Neuvedeno',
+    service: service,
+    breed: breed || '',
+    notes: notes || '',
     eventId: event.getId()
   });
 
@@ -232,7 +225,9 @@ Rezervováno přes web: ${new Date().toLocaleString('cs-CZ')}
     date: Utilities.formatDate(reservationDate, Session.getScriptTimeZone(), 'd.M.yyyy'),
     time: Utilities.formatDate(reservationDate, Session.getScriptTimeZone(), 'H:mm'),
     dayName: getDayName(reservationDate.getDay()),
-    service: service || 'Neuvedeno'
+    service: service,
+    breed: breed || 'Neuvedeno',
+    notes: notes || 'Žádné'
   });
 
   // Send confirmation to customer
@@ -270,6 +265,8 @@ function logToSheet(data) {
       'Datum',
       'Čas',
       'Služba',
+      'Plemeno',
+      'Poznámky',
       'Event ID'
     ]);
   }
@@ -284,6 +281,8 @@ function logToSheet(data) {
     data.date,
     data.time,
     data.service,
+    data.breed,
+    data.notes,
     data.eventId
   ]);
 }
@@ -314,7 +313,13 @@ function sendAlertEmails(data) {
         <p style="font-size: 18px; margin: 0;">
           <strong>${data.dayName} ${data.date}</strong> v <strong>${data.time}</strong>
         </p>
-        <p style="margin: 10px 0 0 0;">Služba: ${data.service}</p>
+        <p style="margin: 10px 0 0 0;"><strong>Služba:</strong> ${data.service}</p>
+        <p style="margin: 5px 0 0 0;"><strong>Plemeno:</strong> ${data.breed}</p>
+      </div>
+
+      <div style="background: #FFF8E7; padding: 15px; border-radius: 8px; margin: 20px 0; border-left: 4px solid #D4A574;">
+        <h4 style="color: #1A1A1A; margin: 0 0 10px 0;">Poznámky od klienta:</h4>
+        <p style="margin: 0; color: #444;">${data.notes}</p>
       </div>
 
       <p style="color: #666; font-size: 12px;">
