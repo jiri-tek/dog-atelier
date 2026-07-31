@@ -225,7 +225,7 @@ function jsonResponse(data) {
 
 /**
  * Get available time slots for the next X days
- * Uses settings from "Nastavení" sheet
+ * Uses settings from "Nastavení" sheet and checks "Zavřeno" sheet
  */
 function getAvailableSlots() {
   const calendar = CalendarApp.getCalendarById(CONFIG.CALENDAR_ID);
@@ -235,6 +235,9 @@ function getAvailableSlots() {
 
   // Load settings from sheet
   const settings = getSettings();
+
+  // Load closed slots from "Zavřeno" sheet
+  const closedData = getClosedSlots();
 
   const slots = [];
   const now = new Date();
@@ -265,13 +268,26 @@ function getAvailableSlots() {
       continue;
     }
 
-    // Skip closed dates
+    // Skip closed dates (from Nastavení sheet)
     if (settings.closedDates.includes(dateStr)) {
       continue;
     }
 
+    // Skip full day closures (from Zavřeno sheet)
+    if (closedData.closedDates.includes(dateStr)) {
+      continue;
+    }
+
+    // Get closed hours for this specific date (from Zavřeno sheet)
+    const closedHours = closedData.closedSlots[dateStr] || [];
+
     // Check each appointment time from settings
     settings.appointmentTimes.forEach(hour => {
+      // Skip if this specific hour is closed
+      if (closedHours.includes(hour)) {
+        return;
+      }
+
       const slotStart = new Date(d);
       slotStart.setHours(hour, 0, 0, 0);
 
@@ -558,6 +574,322 @@ function sendCustomerConfirmation(data) {
     name: 'DogAtelier',
     replyTo: 'dogatelierostrava@gmail.com'
   });
+}
+
+// ============ CLOSED DAYS SHEET FUNCTIONS ============
+
+/**
+ * Create the "Zavřeno" sheet with checkboxes for dates and time slots
+ * Run this function once to create the sheet
+ */
+function setupClosedDaysSheet() {
+  const spreadsheet = SpreadsheetApp.openById(CONFIG.SHEET_ID);
+  let closedSheet = spreadsheet.getSheetByName('Zavřeno');
+
+  if (!closedSheet) {
+    closedSheet = spreadsheet.insertSheet('Zavřeno');
+  }
+
+  // Clear and setup
+  closedSheet.clear();
+
+  // Load settings to get appointment times
+  const settings = getSettings();
+  const times = settings.appointmentTimes.map(h => h + ':00');
+
+  // Headers
+  const headers = ['Datum', 'Den', 'Celý den', ...times];
+  closedSheet.getRange(1, 1, 1, headers.length).setValues([headers]);
+  closedSheet.getRange(1, 1, 1, headers.length).setFontWeight('bold');
+  closedSheet.getRange(1, 1, 1, headers.length).setBackground('#7A8D80');
+  closedSheet.getRange(1, 1, 1, headers.length).setFontColor('white');
+
+  // Generate dates for the next 60 days
+  const today = new Date();
+  const rows = [];
+
+  for (let i = 0; i < 60; i++) {
+    const date = new Date(today);
+    date.setDate(today.getDate() + i);
+
+    const dateStr = Utilities.formatDate(date, Session.getScriptTimeZone(), 'd.M.yyyy');
+    const dayName = getDayName(date.getDay());
+
+    // Row: Date, Day name, Celý den checkbox, time checkboxes...
+    const row = [dateStr, dayName, false];
+    times.forEach(() => row.push(false));
+    rows.push(row);
+  }
+
+  closedSheet.getRange(2, 1, rows.length, headers.length).setValues(rows);
+
+  // Add checkboxes
+  const checkboxRange = closedSheet.getRange(2, 3, rows.length, 1 + times.length);
+  checkboxRange.insertCheckboxes();
+
+  // Format columns
+  closedSheet.setColumnWidth(1, 100);
+  closedSheet.setColumnWidth(2, 80);
+  closedSheet.setColumnWidth(3, 80);
+  times.forEach((_, i) => closedSheet.setColumnWidth(4 + i, 60));
+
+  // Freeze header row
+  closedSheet.setFrozenRows(1);
+
+  // Add conditional formatting - highlight rows where "Celý den" is checked
+  const rule = SpreadsheetApp.newConditionalFormatRule()
+    .whenFormulaSatisfied('=$C2=TRUE')
+    .setBackground('#FFCCCC')
+    .setRanges([closedSheet.getRange(2, 1, rows.length, headers.length)])
+    .build();
+  closedSheet.setConditionalFormatRules([rule]);
+
+  // Add note at the bottom
+  const noteRow = rows.length + 4;
+  closedSheet.getRange(noteRow, 1).setValue('NÁVOD:');
+  closedSheet.getRange(noteRow + 1, 1).setValue('• Zaškrtněte "Celý den" pro uzavření celého dne');
+  closedSheet.getRange(noteRow + 2, 1).setValue('• Nebo zaškrtněte jednotlivé časy pro částečné uzavření');
+  closedSheet.getRange(noteRow + 3, 1).setValue('• Po změně spusťte funkci "syncClosedToCalendar" pro vytvoření událostí v kalendáři');
+  closedSheet.getRange(noteRow, 1, 4, 1).setFontStyle('italic');
+  closedSheet.getRange(noteRow, 1, 4, 1).setFontColor('#666666');
+
+  console.log('Zavřeno sheet created successfully with ' + rows.length + ' days!');
+}
+
+/**
+ * Refresh the Zavřeno sheet - add new dates, keep existing checkboxes
+ * Run this periodically to add more dates
+ */
+function refreshClosedDaysSheet() {
+  const spreadsheet = SpreadsheetApp.openById(CONFIG.SHEET_ID);
+  const closedSheet = spreadsheet.getSheetByName('Zavřeno');
+
+  if (!closedSheet) {
+    setupClosedDaysSheet();
+    return;
+  }
+
+  const settings = getSettings();
+  const times = settings.appointmentTimes.map(h => h + ':00');
+
+  // Get existing dates
+  const data = closedSheet.getDataRange().getValues();
+  const existingDates = new Set();
+
+  for (let i = 1; i < data.length; i++) {
+    if (data[i][0]) {
+      existingDates.add(data[i][0].toString());
+    }
+  }
+
+  // Find the last row with data
+  let lastRow = closedSheet.getLastRow();
+
+  // Add new dates
+  const today = new Date();
+  const newRows = [];
+
+  for (let i = 0; i < 60; i++) {
+    const date = new Date(today);
+    date.setDate(today.getDate() + i);
+
+    const dateStr = Utilities.formatDate(date, Session.getScriptTimeZone(), 'd.M.yyyy');
+
+    if (!existingDates.has(dateStr)) {
+      const dayName = getDayName(date.getDay());
+      const row = [dateStr, dayName, false];
+      times.forEach(() => row.push(false));
+      newRows.push(row);
+    }
+  }
+
+  if (newRows.length > 0) {
+    const startRow = lastRow + 1;
+    closedSheet.getRange(startRow, 1, newRows.length, newRows[0].length).setValues(newRows);
+
+    // Add checkboxes to new rows
+    const checkboxRange = closedSheet.getRange(startRow, 3, newRows.length, 1 + times.length);
+    checkboxRange.insertCheckboxes();
+
+    console.log('Added ' + newRows.length + ' new dates to Zavřeno sheet');
+  } else {
+    console.log('No new dates to add');
+  }
+}
+
+/**
+ * Get closed time slots from the "Zavřeno" sheet
+ * Returns an object with closed dates and specific time slots
+ */
+function getClosedSlots() {
+  const spreadsheet = SpreadsheetApp.openById(CONFIG.SHEET_ID);
+  const closedSheet = spreadsheet.getSheetByName('Zavřeno');
+
+  const result = {
+    closedDates: [],      // Full day closures: ['2025-08-01', '2025-08-02']
+    closedSlots: {}       // Partial closures: {'2025-08-03': [9, 12], '2025-08-04': [15]}
+  };
+
+  if (!closedSheet) {
+    return result;
+  }
+
+  const data = closedSheet.getDataRange().getValues();
+  const headers = data[0];
+
+  // Find time column indices (starting from column 4)
+  const timeColumns = [];
+  for (let c = 3; c < headers.length; c++) {
+    const timeStr = headers[c].toString();
+    const hour = parseInt(timeStr.split(':')[0]);
+    if (!isNaN(hour)) {
+      timeColumns.push({ col: c, hour: hour });
+    }
+  }
+
+  // Parse each row
+  for (let i = 1; i < data.length; i++) {
+    const row = data[i];
+    const dateStr = row[0];
+
+    if (!dateStr) continue;
+
+    // Parse date
+    let date;
+    if (dateStr instanceof Date) {
+      date = dateStr;
+    } else {
+      const parts = dateStr.toString().split('.');
+      if (parts.length === 3) {
+        date = new Date(parseInt(parts[2]), parseInt(parts[1]) - 1, parseInt(parts[0]));
+      } else {
+        continue;
+      }
+    }
+
+    const isoDate = Utilities.formatDate(date, Session.getScriptTimeZone(), 'yyyy-MM-dd');
+    const wholeDay = row[2] === true;
+
+    if (wholeDay) {
+      result.closedDates.push(isoDate);
+    } else {
+      // Check individual time slots
+      const closedHours = [];
+      timeColumns.forEach(tc => {
+        if (row[tc.col] === true) {
+          closedHours.push(tc.hour);
+        }
+      });
+
+      if (closedHours.length > 0) {
+        result.closedSlots[isoDate] = closedHours;
+      }
+    }
+  }
+
+  return result;
+}
+
+/**
+ * Sync closed days to Google Calendar
+ * Creates "Dovolená" events for checked dates/times
+ */
+function syncClosedToCalendar() {
+  const calendar = CalendarApp.getCalendarById(CONFIG.CALENDAR_ID);
+  if (!calendar) {
+    console.log('Calendar not found!');
+    return;
+  }
+
+  const settings = getSettings();
+  const closedData = getClosedSlots();
+
+  let created = 0;
+  let skipped = 0;
+
+  // Process full day closures
+  closedData.closedDates.forEach(dateStr => {
+    const date = new Date(dateStr);
+    const nextDay = new Date(date);
+    nextDay.setDate(nextDay.getDate() + 1);
+
+    // Check if event already exists
+    const existingEvents = calendar.getEvents(date, nextDay);
+    const hasHolidayEvent = existingEvents.some(e =>
+      e.getTitle().includes('Dovolená') || e.getTitle().includes('Zavřeno')
+    );
+
+    if (!hasHolidayEvent) {
+      calendar.createAllDayEvent('Dovolená - DogAtelier', date, {
+        description: 'Automaticky vytvořeno z listu Zavřeno'
+      });
+      created++;
+    } else {
+      skipped++;
+    }
+  });
+
+  // Process partial day closures
+  Object.keys(closedData.closedSlots).forEach(dateStr => {
+    const hours = closedData.closedSlots[dateStr];
+    const date = new Date(dateStr);
+
+    hours.forEach(hour => {
+      const startTime = new Date(date);
+      startTime.setHours(hour, 0, 0, 0);
+
+      const endTime = new Date(startTime.getTime() + settings.slotDuration * 60000);
+
+      // Check if event already exists
+      const existingEvents = calendar.getEvents(startTime, endTime);
+      const hasHolidayEvent = existingEvents.some(e =>
+        e.getTitle().includes('Dovolená') || e.getTitle().includes('Zavřeno')
+      );
+
+      if (!hasHolidayEvent) {
+        calendar.createEvent('Zavřeno - DogAtelier', startTime, endTime, {
+          description: 'Automaticky vytvořeno z listu Zavřeno'
+        });
+        created++;
+      } else {
+        skipped++;
+      }
+    });
+  });
+
+  console.log('Sync complete! Created: ' + created + ' events, Skipped (already exist): ' + skipped);
+}
+
+/**
+ * Remove all "Dovolená" and "Zavřeno" events created by this script
+ * Use this to clean up and resync
+ */
+function clearClosedCalendarEvents() {
+  const calendar = CalendarApp.getCalendarById(CONFIG.CALENDAR_ID);
+  if (!calendar) {
+    console.log('Calendar not found!');
+    return;
+  }
+
+  const startDate = new Date();
+  const endDate = new Date();
+  endDate.setDate(endDate.getDate() + 90);
+
+  const events = calendar.getEvents(startDate, endDate);
+  let deleted = 0;
+
+  events.forEach(event => {
+    const title = event.getTitle();
+    const desc = event.getDescription() || '';
+
+    if ((title.includes('Dovolená') || title.includes('Zavřeno')) &&
+        desc.includes('Automaticky vytvořeno z listu Zavřeno')) {
+      event.deleteEvent();
+      deleted++;
+    }
+  });
+
+  console.log('Deleted ' + deleted + ' events');
 }
 
 // ============ TEST FUNCTIONS ============
