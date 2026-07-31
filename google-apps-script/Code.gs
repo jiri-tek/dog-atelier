@@ -761,10 +761,21 @@ function getClosedSlots() {
   const headers = data[0];
 
   // Find time column indices (starting from column 4)
+  // Headers might be Date objects (representing times) or strings like "9:00"
   const timeColumns = [];
   for (let c = 3; c < headers.length; c++) {
-    const timeStr = headers[c].toString();
-    const hour = parseInt(timeStr.split(':')[0]);
+    let hour;
+    const headerVal = headers[c];
+
+    if (headerVal instanceof Date) {
+      // Extract hour from Date object (e.g., 1899-12-30T08:00:00 → 9)
+      hour = headerVal.getHours();
+    } else {
+      // Parse from string like "9:00"
+      const timeStr = headerVal.toString();
+      hour = parseInt(timeStr.split(':')[0]);
+    }
+
     if (!isNaN(hour)) {
       timeColumns.push({ col: c, hour: hour });
     }
@@ -773,16 +784,16 @@ function getClosedSlots() {
   // Parse each row
   for (let i = 1; i < data.length; i++) {
     const row = data[i];
-    const dateStr = row[0];
+    const dateValue = row[0];
 
-    if (!dateStr) continue;
+    if (!dateValue) continue;
 
-    // Parse date
+    // Parse date - can be Date object or string
     let date;
-    if (dateStr instanceof Date) {
-      date = dateStr;
+    if (dateValue instanceof Date) {
+      date = dateValue;
     } else {
-      const parts = dateStr.toString().split('.');
+      const parts = dateValue.toString().split('.');
       if (parts.length === 3) {
         date = new Date(parseInt(parts[2]), parseInt(parts[1]) - 1, parseInt(parts[0]));
       } else {
