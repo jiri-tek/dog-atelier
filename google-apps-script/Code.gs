@@ -4,7 +4,7 @@
  * SETUP INSTRUCTIONS:
  * 1. Go to https://script.google.com and create a new project
  * 2. Copy this entire code into the Code.gs file
- * 3. Update the CALENDAR_ID if using a different calendar
+ * 3. Create "Nastavení" sheet in your spreadsheet (see setupSettingsSheet function)
  * 4. Deploy as Web App (Deploy > New deployment > Web app)
  *    - Execute as: Me (your account)
  *    - Who has access: Anyone
@@ -22,18 +22,157 @@ const CONFIG = {
   // Email addresses for alerts
   ALERT_EMAILS: ['dogatelierostrava@gmail.com', 'staffa.ppc@gmail.com', 'p.holla@email.cz'],
 
-  // Fixed appointment times (hours in 24h format)
-  APPOINTMENT_TIMES: [9, 12, 15],  // 9:00, 12:00, 15:00
-
-  // Slot duration in minutes (used for calendar event length)
-  SLOT_DURATION: 150,  // 2.5 hours between appointments
+  // Default slot duration in minutes (used for calendar event length)
+  SLOT_DURATION: 150,  // 2.5 hours
 
   // Days to show in advance
-  DAYS_AHEAD: 30,
-
-  // Working days (0 = Sunday, 1 = Monday, ..., 6 = Saturday)
-  WORKING_DAYS: [1, 2, 3, 4, 5] // Monday to Friday
+  DAYS_AHEAD: 30
 };
+
+// ============ SETTINGS FROM SHEET ============
+
+/**
+ * Load settings from "Nastavení" sheet
+ */
+function getSettings() {
+  try {
+    const spreadsheet = SpreadsheetApp.openById(CONFIG.SHEET_ID);
+    const settingsSheet = spreadsheet.getSheetByName('Nastavení');
+
+    if (!settingsSheet) {
+      // Return defaults if settings sheet doesn't exist
+      return {
+        workingDays: [1, 2, 3, 4, 5], // Mon-Fri
+        appointmentTimes: [9, 12, 15],
+        closedDates: [],
+        slotDuration: 150
+      };
+    }
+
+    const data = settingsSheet.getDataRange().getValues();
+    const settings = {
+      workingDays: [],
+      appointmentTimes: [],
+      closedDates: [],
+      slotDuration: CONFIG.SLOT_DURATION
+    };
+
+    // Parse settings
+    for (let i = 1; i < data.length; i++) {
+      const key = data[i][0];
+      const value = data[i][1];
+      const enabled = data[i][2];
+
+      if (key === 'PRACOVNÍ DNY') {
+        // Parse working days
+        if (value && enabled === true) {
+          const dayMap = {'Po': 1, 'Út': 2, 'St': 3, 'Čt': 4, 'Pá': 5, 'So': 6, 'Ne': 0};
+          const days = value.toString().split(',').map(d => d.trim());
+          settings.workingDays = days.map(d => dayMap[d]).filter(d => d !== undefined);
+        }
+      } else if (key === 'ČASY REZERVACÍ') {
+        // Parse appointment times
+        if (value) {
+          const times = value.toString().split(',').map(t => {
+            const hour = parseInt(t.trim().split(':')[0]);
+            return isNaN(hour) ? null : hour;
+          }).filter(t => t !== null);
+          if (times.length > 0) settings.appointmentTimes = times;
+        }
+      } else if (key === 'DÉLKA REZERVACE (min)') {
+        if (value) settings.slotDuration = parseInt(value) || CONFIG.SLOT_DURATION;
+      } else if (key === 'ZAVŘENO' && value) {
+        // Parse closed dates
+        try {
+          if (value instanceof Date) {
+            settings.closedDates.push(Utilities.formatDate(value, Session.getScriptTimeZone(), 'yyyy-MM-dd'));
+          } else {
+            // Try to parse date string
+            const dateStr = value.toString();
+            const parts = dateStr.split('.');
+            if (parts.length === 3) {
+              const date = new Date(parts[2], parts[1] - 1, parts[0]);
+              settings.closedDates.push(Utilities.formatDate(date, Session.getScriptTimeZone(), 'yyyy-MM-dd'));
+            }
+          }
+        } catch (e) {
+          // Skip invalid dates
+        }
+      }
+    }
+
+    // Use defaults if empty
+    if (settings.workingDays.length === 0) settings.workingDays = [1, 2, 3, 4, 5];
+    if (settings.appointmentTimes.length === 0) settings.appointmentTimes = [9, 12, 15];
+
+    return settings;
+  } catch (e) {
+    // Return defaults on error
+    return {
+      workingDays: [1, 2, 3, 4, 5],
+      appointmentTimes: [9, 12, 15],
+      closedDates: [],
+      slotDuration: 150
+    };
+  }
+}
+
+/**
+ * Create or update the Settings sheet with default values
+ * Run this function once to create the settings sheet
+ */
+function setupSettingsSheet() {
+  const spreadsheet = SpreadsheetApp.openById(CONFIG.SHEET_ID);
+  let settingsSheet = spreadsheet.getSheetByName('Nastavení');
+
+  if (!settingsSheet) {
+    settingsSheet = spreadsheet.insertSheet('Nastavení');
+  }
+
+  // Clear and setup
+  settingsSheet.clear();
+
+  // Headers
+  settingsSheet.getRange('A1:C1').setValues([['Nastavení', 'Hodnota', 'Aktivní']]);
+  settingsSheet.getRange('A1:C1').setFontWeight('bold');
+  settingsSheet.getRange('A1:C1').setBackground('#7A8D80');
+  settingsSheet.getRange('A1:C1').setFontColor('white');
+
+  // Settings rows
+  const settings = [
+    ['PRACOVNÍ DNY', 'Po, Út, St, Čt, Pá', true],
+    ['ČASY REZERVACÍ', '9:00, 12:00, 15:00', ''],
+    ['DÉLKA REZERVACE (min)', '150', ''],
+    ['', '', ''],
+    ['ZAVŘENO (přidejte řádky)', '', ''],
+    ['ZAVŘENO', '', ''],
+    ['ZAVŘENO', '', ''],
+    ['ZAVŘENO', '', ''],
+    ['ZAVŘENO', '', ''],
+    ['ZAVŘENO', '', ''],
+  ];
+
+  settingsSheet.getRange(2, 1, settings.length, 3).setValues(settings);
+
+  // Format
+  settingsSheet.setColumnWidth(1, 200);
+  settingsSheet.setColumnWidth(2, 200);
+  settingsSheet.setColumnWidth(3, 80);
+
+  // Add checkbox for Aktivní
+  settingsSheet.getRange('C2').insertCheckboxes();
+
+  // Add note
+  settingsSheet.getRange('A13').setValue('NÁVOD:');
+  settingsSheet.getRange('A14').setValue('• Pracovní dny: Po, Út, St, Čt, Pá, So, Ne');
+  settingsSheet.getRange('A15').setValue('• Časy: např. 9:00, 12:00, 15:00');
+  settingsSheet.getRange('A16').setValue('• Zavřeno: zadejte datum ve formátu 24.12.2025');
+  settingsSheet.getRange('A17').setValue('• Po změně nastavení není třeba nic dalšího dělat');
+  settingsSheet.getRange('A13:A17').setFontStyle('italic');
+  settingsSheet.getRange('A13:A17').setFontColor('#666666');
+
+  console.log('Settings sheet created successfully!');
+}
 
 // ============ WEB APP HANDLERS ============
 
@@ -86,13 +225,16 @@ function jsonResponse(data) {
 
 /**
  * Get available time slots for the next X days
- * Uses fixed appointment times: 9:00, 12:00, 15:00
+ * Uses settings from "Nastavení" sheet
  */
 function getAvailableSlots() {
   const calendar = CalendarApp.getCalendarById(CONFIG.CALENDAR_ID);
   if (!calendar) {
     throw new Error('Calendar not found. Check CALENDAR_ID configuration.');
   }
+
+  // Load settings from sheet
+  const settings = getSettings();
 
   const slots = [];
   const now = new Date();
@@ -116,18 +258,24 @@ function getAvailableSlots() {
   // Generate available slots for each day
   for (let d = new Date(startDate); d < endDate; d.setDate(d.getDate() + 1)) {
     const dayOfWeek = d.getDay();
+    const dateStr = Utilities.formatDate(d, Session.getScriptTimeZone(), 'yyyy-MM-dd');
 
     // Skip non-working days
-    if (!CONFIG.WORKING_DAYS.includes(dayOfWeek)) {
+    if (!settings.workingDays.includes(dayOfWeek)) {
       continue;
     }
 
-    // Check each fixed appointment time
-    CONFIG.APPOINTMENT_TIMES.forEach(hour => {
+    // Skip closed dates
+    if (settings.closedDates.includes(dateStr)) {
+      continue;
+    }
+
+    // Check each appointment time from settings
+    settings.appointmentTimes.forEach(hour => {
       const slotStart = new Date(d);
       slotStart.setHours(hour, 0, 0, 0);
 
-      const slotEnd = new Date(slotStart.getTime() + CONFIG.SLOT_DURATION * 60000);
+      const slotEnd = new Date(slotStart.getTime() + settings.slotDuration * 60000);
 
       // Check if slot conflicts with any existing event
       const isAvailable = !busyTimes.some(busy => {
@@ -171,9 +319,12 @@ function createReservation(data) {
     return { success: false, error: 'Vyplňte prosím všechna povinná pole.' };
   }
 
+  // Load settings
+  const settings = getSettings();
+
   // Parse the datetime
   const reservationDate = new Date(datetime);
-  const endDate = new Date(reservationDate.getTime() + CONFIG.SLOT_DURATION * 60000);
+  const endDate = new Date(reservationDate.getTime() + settings.slotDuration * 60000);
 
   // Check if slot is still available
   const calendar = CalendarApp.getCalendarById(CONFIG.CALENDAR_ID);
@@ -184,7 +335,7 @@ function createReservation(data) {
   }
 
   // Create calendar event
-  const eventTitle = `🐕 ${firstName} ${lastName} - ${service}`;
+  const eventTitle = `${firstName} ${lastName} - ${service}`;
   const eventDescription = `
 Klient: ${firstName} ${lastName}
 Email: ${email}
@@ -252,7 +403,13 @@ Rezervováno přes web: ${new Date().toLocaleString('cs-CZ')}
  * Log reservation to Google Sheet
  */
 function logToSheet(data) {
-  const sheet = SpreadsheetApp.openById(CONFIG.SHEET_ID).getActiveSheet();
+  const spreadsheet = SpreadsheetApp.openById(CONFIG.SHEET_ID);
+  let sheet = spreadsheet.getSheetByName('Rezervace');
+
+  // If "Rezervace" sheet doesn't exist, use the first sheet
+  if (!sheet) {
+    sheet = spreadsheet.getSheets()[0];
+  }
 
   // Check if headers exist, if not create them
   if (sheet.getLastRow() === 0) {
@@ -271,13 +428,16 @@ function logToSheet(data) {
     ]);
   }
 
+  // Format phone number as text (add apostrophe to prevent formula interpretation)
+  const phoneFormatted = "'" + data.phone;
+
   // Append new reservation
   sheet.appendRow([
     data.timestamp,
     data.firstName,
     data.lastName,
     data.email,
-    data.phone,
+    phoneFormatted,
     data.date,
     data.time,
     data.service,
@@ -426,6 +586,17 @@ function testSetup() {
     console.log('✓ Sheet access OK: ' + sheet.getName());
   } catch (e) {
     console.log('✗ Sheet error: ' + e.message);
+  }
+
+  // Test settings
+  try {
+    const settings = getSettings();
+    console.log('✓ Settings loaded:');
+    console.log('  Working days: ' + settings.workingDays.join(', '));
+    console.log('  Appointment times: ' + settings.appointmentTimes.join(', '));
+    console.log('  Closed dates: ' + (settings.closedDates.length > 0 ? settings.closedDates.join(', ') : 'none'));
+  } catch (e) {
+    console.log('✗ Settings error: ' + e.message);
   }
 
   // Test available slots
