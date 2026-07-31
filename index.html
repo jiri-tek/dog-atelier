@@ -8,20 +8,23 @@
         window.dataLayer = window.dataLayer || [];
         function gtag(){dataLayer.push(arguments);}
 
-        // Load saved preferences or use default (all granted - opt-out model)
-        const savedConsent = localStorage.getItem('dogatelier_consent_v2');
-        const defaultConsent = savedConsent ? JSON.parse(savedConsent) : {
-            'ad_storage': 'granted',
-            'ad_user_data': 'granted',
-            'ad_personalization': 'granted',
-            'analytics_storage': 'granted',
-            'personalization_storage': 'granted',
+        // Default consent state - denied for all except functionality and security
+        gtag('consent', 'default', {
+            'ad_storage': 'denied',
+            'ad_user_data': 'denied',
+            'ad_personalization': 'denied',
+            'analytics_storage': 'denied',
+            'personalization_storage': 'denied',
             'functionality_storage': 'granted',
-            'security_storage': 'granted'
-        };
+            'security_storage': 'granted',
+            'wait_for_update': 500
+        });
 
-        // Set default consent state BEFORE loading GTM
-        gtag('consent', 'default', defaultConsent);
+        // If user has saved preferences, apply them as update
+        const savedConsent = localStorage.getItem('dogatelier_consent_v2');
+        if (savedConsent) {
+            gtag('consent', 'update', JSON.parse(savedConsent));
+        }
     </script>
 
     <!-- Google Tag Manager -->
@@ -2108,7 +2111,7 @@
                             <span class="cookie-category-desc">Pomáhají nám pochopit, jak používáte web</span>
                         </div>
                         <label class="cookie-toggle">
-                            <input type="checkbox" id="analytics_storage" checked>
+                            <input type="checkbox" id="analytics_storage">
                             <span class="cookie-toggle-slider"></span>
                         </label>
                     </div>
@@ -2121,7 +2124,7 @@
                             <span class="cookie-category-desc">Používány pro cílenou reklamu</span>
                         </div>
                         <label class="cookie-toggle">
-                            <input type="checkbox" id="ad_storage" checked>
+                            <input type="checkbox" id="ad_storage">
                             <span class="cookie-toggle-slider"></span>
                         </label>
                     </div>
@@ -2134,7 +2137,7 @@
                             <span class="cookie-category-desc">Sdílení dat s reklamními partnery</span>
                         </div>
                         <label class="cookie-toggle">
-                            <input type="checkbox" id="ad_user_data" checked>
+                            <input type="checkbox" id="ad_user_data">
                             <span class="cookie-toggle-slider"></span>
                         </label>
                     </div>
@@ -2147,7 +2150,7 @@
                             <span class="cookie-category-desc">Zobrazování relevantních reklam</span>
                         </div>
                         <label class="cookie-toggle">
-                            <input type="checkbox" id="ad_personalization" checked>
+                            <input type="checkbox" id="ad_personalization">
                             <span class="cookie-toggle-slider"></span>
                         </label>
                     </div>
@@ -2160,7 +2163,7 @@
                             <span class="cookie-category-desc">Zapamatování vašich preferencí</span>
                         </div>
                         <label class="cookie-toggle">
-                            <input type="checkbox" id="personalization_storage" checked>
+                            <input type="checkbox" id="personalization_storage">
                             <span class="cookie-toggle-slider"></span>
                         </label>
                     </div>
@@ -2173,7 +2176,7 @@
                             <span class="cookie-category-desc">Vylepšené funkce a služby</span>
                         </div>
                         <label class="cookie-toggle">
-                            <input type="checkbox" id="functionality_storage" checked>
+                            <input type="checkbox" id="functionality_storage" checked disabled>
                             <span class="cookie-toggle-slider"></span>
                         </label>
                     </div>
@@ -2213,10 +2216,16 @@
         if (saved) {
             return JSON.parse(saved);
         }
-        // Default: all granted (opt-out model)
-        const defaultState = {};
-        CONSENT_CATEGORIES.forEach(cat => defaultState[cat] = 'granted');
-        return defaultState;
+        // Default: denied for all except functionality and security (opt-in model)
+        return {
+            'ad_storage': 'denied',
+            'ad_user_data': 'denied',
+            'ad_personalization': 'denied',
+            'analytics_storage': 'denied',
+            'personalization_storage': 'denied',
+            'functionality_storage': 'granted',
+            'security_storage': 'granted'
+        };
     }
 
     function saveConsentState(state) {
@@ -2293,25 +2302,29 @@
     }
 
     function rejectAllCookies() {
-        const state = {};
-        CONSENT_CATEGORIES.forEach(cat => state[cat] = 'denied');
-        // Security storage should always be granted
-        state['security_storage'] = 'granted';
+        const state = {
+            'ad_storage': 'denied',
+            'ad_user_data': 'denied',
+            'ad_personalization': 'denied',
+            'analytics_storage': 'denied',
+            'personalization_storage': 'denied',
+            'functionality_storage': 'granted',
+            'security_storage': 'granted'
+        };
         saveConsentState(state);
         closeCookieModal();
     }
 
     function saveConsentPreferences() {
-        const state = {};
-        CONSENT_CATEGORIES.forEach(cat => {
-            const toggle = document.getElementById(cat);
-            if (toggle) {
-                state[cat] = toggle.checked ? 'granted' : 'denied';
-            } else {
-                // Default for categories without toggle (like security_storage)
-                state[cat] = 'granted';
-            }
-        });
+        const state = {
+            'ad_storage': document.getElementById('ad_storage').checked ? 'granted' : 'denied',
+            'ad_user_data': document.getElementById('ad_user_data').checked ? 'granted' : 'denied',
+            'ad_personalization': document.getElementById('ad_personalization').checked ? 'granted' : 'denied',
+            'analytics_storage': document.getElementById('analytics_storage').checked ? 'granted' : 'denied',
+            'personalization_storage': document.getElementById('personalization_storage').checked ? 'granted' : 'denied',
+            'functionality_storage': 'granted',  // Always granted
+            'security_storage': 'granted'        // Always granted
+        };
         saveConsentState(state);
         closeCookieModal();
     }
