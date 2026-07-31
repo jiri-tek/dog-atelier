@@ -1107,25 +1107,47 @@ function testSetup() {
 }
 
 /**
- * Test function to debug closed slots
+ * Test function to debug closed slots - DETAILED
  */
 function testClosedSlots() {
+  const spreadsheet = SpreadsheetApp.openById(CONFIG.SHEET_ID);
+  const closedSheet = spreadsheet.getSheetByName('Zavřeno');
+
+  if (!closedSheet) {
+    console.log('ERROR: Sheet "Zavřeno" not found!');
+    return;
+  }
+
+  const data = closedSheet.getDataRange().getValues();
+  console.log('=== RAW DATA DEBUG ===');
+  console.log('Total rows:', data.length);
+  console.log('Headers:', JSON.stringify(data[0]));
+
+  // Show first 5 data rows
+  for (let i = 1; i < Math.min(6, data.length); i++) {
+    const row = data[i];
+    console.log('Row ' + i + ': Date=' + row[0] + ', Day=' + row[1] + ', CelýDen=' + row[2] + ' (type:' + typeof row[2] + '), 9:00=' + row[3] + ' (type:' + typeof row[3] + '), 12:00=' + row[4] + ', 15:00=' + row[5]);
+  }
+
+  // Find row with 4.8
+  for (let i = 1; i < data.length; i++) {
+    const row = data[i];
+    const dateStr = row[0].toString();
+    if (dateStr.includes('4.8') || dateStr.includes('4. 8')) {
+      console.log('=== FOUND 4.8 ROW ===');
+      console.log('Row index:', i);
+      console.log('Full row data:', JSON.stringify(row));
+      console.log('Column 3 (9:00) value:', row[3], 'type:', typeof row[3]);
+      console.log('Is true?', row[3] === true);
+      console.log('Is "TRUE"?', row[3] === 'TRUE');
+      console.log('Is 1?', row[3] === 1);
+      console.log('Boolean cast:', Boolean(row[3]));
+    }
+  }
+
+  // Now test the actual function
+  console.log('=== CALLING getClosedSlots() ===');
   const closedData = getClosedSlots();
-  console.log('=== CLOSED SLOTS DEBUG ===');
   console.log('Full day closures:', JSON.stringify(closedData.closedDates));
   console.log('Partial closures:', JSON.stringify(closedData.closedSlots));
-
-  const settings = getSettings();
-  console.log('Appointment times:', JSON.stringify(settings.appointmentTimes));
-
-  // Test a specific date if there are partial closures
-  Object.keys(closedData.closedSlots).forEach(dateStr => {
-    const closedHours = closedData.closedSlots[dateStr];
-    console.log('Date ' + dateStr + ' has closed hours: ' + JSON.stringify(closedHours));
-
-    settings.appointmentTimes.forEach(hour => {
-      const isClosed = closedHours.includes(hour);
-      console.log('  Hour ' + hour + ' closed: ' + isClosed);
-    });
-  });
 }
