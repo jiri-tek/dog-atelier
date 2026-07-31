@@ -615,16 +615,22 @@ function setupClosedDaysSheet() {
   closedSheet.getRange(1, 1, 1, headers.length).setBackground('#7A8D80');
   closedSheet.getRange(1, 1, 1, headers.length).setFontColor('white');
 
-  // Generate dates until end of year
+  // Generate dates until end of year (skip weekends)
   const today = new Date();
   const endOfYear = new Date(today.getFullYear(), 11, 31);
   const rows = [];
 
   for (let d = new Date(today); d <= endOfYear; d.setDate(d.getDate() + 1)) {
     const date = new Date(d);
+    const dayOfWeek = date.getDay();
+
+    // Skip weekends (Saturday = 6, Sunday = 0)
+    if (dayOfWeek === 0 || dayOfWeek === 6) {
+      continue;
+    }
 
     const dateStr = Utilities.formatDate(date, Session.getScriptTimeZone(), 'd.M.yyyy');
-    const dayName = getDayName(date.getDay());
+    const dayName = getDayName(dayOfWeek);
 
     // Row: Date, Day name, Celý den checkbox, time checkboxes...
     const row = [dateStr, dayName, false];
@@ -696,17 +702,24 @@ function refreshClosedDaysSheet() {
   // Find the last row with data
   let lastRow = closedSheet.getLastRow();
 
-  // Add new dates until end of year
+  // Add new dates until end of year (skip weekends)
   const today = new Date();
   const endOfYear = new Date(today.getFullYear(), 11, 31);
   const newRows = [];
 
   for (let d = new Date(today); d <= endOfYear; d.setDate(d.getDate() + 1)) {
     const date = new Date(d);
+    const dayOfWeek = date.getDay();
+
+    // Skip weekends (Saturday = 6, Sunday = 0)
+    if (dayOfWeek === 0 || dayOfWeek === 6) {
+      continue;
+    }
+
     const dateStr = Utilities.formatDate(date, Session.getScriptTimeZone(), 'd.M.yyyy');
 
     if (!existingDates.has(dateStr)) {
-      const dayName = getDayName(date.getDay());
+      const dayName = getDayName(dayOfWeek);
       const row = [dateStr, dayName, false];
       times.forEach(() => row.push(false));
       newRows.push(row);
