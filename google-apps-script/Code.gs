@@ -791,7 +791,7 @@ function getClosedSlots() {
     }
 
     const isoDate = Utilities.formatDate(date, Session.getScriptTimeZone(), 'yyyy-MM-dd');
-    const wholeDay = row[2] === true;
+    const wholeDay = row[2] === true || row[2] === 'TRUE' || row[2] === 1;
 
     if (wholeDay) {
       result.closedDates.push(isoDate);
@@ -799,7 +799,8 @@ function getClosedSlots() {
       // Check individual time slots
       const closedHours = [];
       timeColumns.forEach(tc => {
-        if (row[tc.col] === true) {
+        const cellValue = row[tc.col];
+        if (cellValue === true || cellValue === 'TRUE' || cellValue === 1) {
           closedHours.push(tc.hour);
         }
       });
@@ -1103,4 +1104,28 @@ function testSetup() {
   }
 
   console.log('Test complete!');
+}
+
+/**
+ * Test function to debug closed slots
+ */
+function testClosedSlots() {
+  const closedData = getClosedSlots();
+  console.log('=== CLOSED SLOTS DEBUG ===');
+  console.log('Full day closures:', JSON.stringify(closedData.closedDates));
+  console.log('Partial closures:', JSON.stringify(closedData.closedSlots));
+
+  const settings = getSettings();
+  console.log('Appointment times:', JSON.stringify(settings.appointmentTimes));
+
+  // Test a specific date if there are partial closures
+  Object.keys(closedData.closedSlots).forEach(dateStr => {
+    const closedHours = closedData.closedSlots[dateStr];
+    console.log('Date ' + dateStr + ' has closed hours: ' + JSON.stringify(closedHours));
+
+    settings.appointmentTimes.forEach(hour => {
+      const isClosed = closedHours.includes(hour);
+      console.log('  Hour ' + hour + ' closed: ' + isClosed);
+    });
+  });
 }
