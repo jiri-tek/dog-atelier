@@ -25,9 +25,20 @@ const CONFIG = {
   // Default slot duration in minutes (used for calendar event length)
   SLOT_DURATION: 150,  // 2.5 hours
 
-  // Days to show in advance
-  DAYS_AHEAD: 30
+  // Show slots until end of year (calculated dynamically)
+  DAYS_AHEAD: calculateDaysUntilEndOfYear()
 };
+
+/**
+ * Calculate days until end of current year
+ */
+function calculateDaysUntilEndOfYear() {
+  const now = new Date();
+  const endOfYear = new Date(now.getFullYear(), 11, 31); // Dec 31
+  const diffTime = endOfYear.getTime() - now.getTime();
+  const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+  return Math.max(diffDays, 30); // At least 30 days
+}
 
 // ============ SETTINGS FROM SHEET ============
 
@@ -604,13 +615,13 @@ function setupClosedDaysSheet() {
   closedSheet.getRange(1, 1, 1, headers.length).setBackground('#7A8D80');
   closedSheet.getRange(1, 1, 1, headers.length).setFontColor('white');
 
-  // Generate dates for the next 60 days
+  // Generate dates until end of year
   const today = new Date();
+  const endOfYear = new Date(today.getFullYear(), 11, 31);
   const rows = [];
 
-  for (let i = 0; i < 60; i++) {
-    const date = new Date(today);
-    date.setDate(today.getDate() + i);
+  for (let d = new Date(today); d <= endOfYear; d.setDate(d.getDate() + 1)) {
+    const date = new Date(d);
 
     const dateStr = Utilities.formatDate(date, Session.getScriptTimeZone(), 'd.M.yyyy');
     const dayName = getDayName(date.getDay());
@@ -685,14 +696,13 @@ function refreshClosedDaysSheet() {
   // Find the last row with data
   let lastRow = closedSheet.getLastRow();
 
-  // Add new dates
+  // Add new dates until end of year
   const today = new Date();
+  const endOfYear = new Date(today.getFullYear(), 11, 31);
   const newRows = [];
 
-  for (let i = 0; i < 60; i++) {
-    const date = new Date(today);
-    date.setDate(today.getDate() + i);
-
+  for (let d = new Date(today); d <= endOfYear; d.setDate(d.getDate() + 1)) {
+    const date = new Date(d);
     const dateStr = Utilities.formatDate(date, Session.getScriptTimeZone(), 'd.M.yyyy');
 
     if (!existingDates.has(dateStr)) {
@@ -872,8 +882,7 @@ function clearClosedCalendarEvents() {
   }
 
   const startDate = new Date();
-  const endDate = new Date();
-  endDate.setDate(endDate.getDate() + 90);
+  const endDate = new Date(startDate.getFullYear(), 11, 31);
 
   const events = calendar.getEvents(startDate, endDate);
   let deleted = 0;
@@ -890,6 +899,144 @@ function clearClosedCalendarEvents() {
   });
 
   console.log('Deleted ' + deleted + ' events');
+}
+
+/**
+ * Automatic trigger - syncs calendar when checkbox is changed
+ * SETUP: Run setupOnEditTrigger() once to install this trigger
+ */
+function onZavrenoEdit(e) {
+  try {
+    const sheet = e.source.getActiveSheet();
+
+    // Only process edits on "Zavřeno" sheet
+    if (sheet.getName() !== 'Zavřeno') {
+      return;
+    }
+
+    const range = e.range;
+    const row = range.getRow();
+    const col = range.getColumn();
+
+    // Only process checkbox columns (3 = Celý den, 4+ = time slots)
+    if (row < 2 || col < 3) {
+      return;
+    }
+
+    const calendar = CalendarApp.getCalendarById(CONFIG.CALENDAR_ID);
+    if (!calendar) {
+      return;
+    }
+
+    const settings = getSettings();
+    const headers = sheet.getRange(1, 1, 1, sheet.getLastColumn()).getValues()[0];
+
+    // Get date from column A
+    const dateValue = sheet.getRange(row, 1).getValue();
+    let date;
+
+    if (dateValue instanceof Date) {
+      date = dateValue;
+    } else {
+      const parts = dateValue.toString().split('.');
+      if (parts.length === 3) {
+        date = new Date(parseInt(parts[2]), parseInt(parts[1]) - 1, parseInt(parts[0]));
+      } else {
+        return;
+      }
+    }
+
+    const isChecked = e.value === 'TRUE' || e.value === true;
+    const isCelyDen = col === 3;
+
+    if (isCelyDen) {
+      // Full day toggle
+      const nextDay = new Date(date);
+      nextDay.setDate(nextDay.getDate() + 1);
+
+      if (isChecked) {
+        // Create all-day event
+        const existingEvents = calendar.getEvents(date, nextDay);
+        const hasEvent = existingEvents.some(ev =>
+          ev.getTitle().includes('Dovolená') &&
+          ev.getDescription()?.includes('Automaticky vytvořeno')
+        );
+
+        if (!hasEvent) {
+          calendar.createAllDayEvent('Dovolená - DogAtelier', date, {
+            description: 'Automaticky vytvořeno z listu Zavřeno'
+          });
+        }
+      } else {
+        // Remove all-day event
+        const events = calendar.getEvents(date, nextDay);
+        events.forEach(ev => {
+          if (ev.getTitle().includes('Dovolená') &&
+              ev.getDescription()?.includes('Automaticky vytvořeno')) {
+            ev.deleteEvent();
+          }
+        });
+      }
+    } else {
+      // Specific time slot toggle
+      const timeStr = headers[col - 1];
+      const hour = parseInt(timeStr.toString().split(':')[0]);
+
+      if (isNaN(hour)) return;
+
+      const startTime = new Date(date);
+      startTime.setHours(hour, 0, 0, 0);
+      const endTime = new Date(startTime.getTime() + settings.slotDuration * 60000);
+
+      if (isChecked) {
+        // Create time-specific event
+        const existingEvents = calendar.getEvents(startTime, endTime);
+        const hasEvent = existingEvents.some(ev =>
+          ev.getTitle().includes('Zavřeno') &&
+          ev.getDescription()?.includes('Automaticky vytvořeno')
+        );
+
+        if (!hasEvent) {
+          calendar.createEvent('Zavřeno - DogAtelier', startTime, endTime, {
+            description: 'Automaticky vytvořeno z listu Zavřeno'
+          });
+        }
+      } else {
+        // Remove time-specific event
+        const events = calendar.getEvents(startTime, endTime);
+        events.forEach(ev => {
+          if (ev.getTitle().includes('Zavřeno') &&
+              ev.getDescription()?.includes('Automaticky vytvořeno')) {
+            ev.deleteEvent();
+          }
+        });
+      }
+    }
+  } catch (error) {
+    console.log('onZavrenoEdit error: ' + error.message);
+  }
+}
+
+/**
+ * Install the onEdit trigger for automatic calendar sync
+ * Run this function ONCE to set up automatic sync
+ */
+function setupOnEditTrigger() {
+  // Remove existing triggers for this function
+  const triggers = ScriptApp.getProjectTriggers();
+  triggers.forEach(trigger => {
+    if (trigger.getHandlerFunction() === 'onZavrenoEdit') {
+      ScriptApp.deleteTrigger(trigger);
+    }
+  });
+
+  // Create new trigger
+  ScriptApp.newTrigger('onZavrenoEdit')
+    .forSpreadsheet(CONFIG.SHEET_ID)
+    .onEdit()
+    .create();
+
+  console.log('onEdit trigger installed successfully!');
 }
 
 // ============ TEST FUNCTIONS ============
