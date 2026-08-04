@@ -1,0 +1,20 @@
+{
+  "version": 2,
+  "routes": [
+    {
+      "src": "/api/(.*)",
+      "dest": "/api/$1"
+    }
+  ],
+  "headers": [
+    {
+      "source": "/admin/(.*)",
+      "headers": [
+        {
+          "key": "X-Robots-Tag",
+          "value": "noindex, nofollow"
+        }
+      ]
+    }
+  ]
+}

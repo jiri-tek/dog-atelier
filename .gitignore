@@ -12,3 +12,4 @@ logo-*.png
 
 # Concept files (keeping only final)
 concept*.html
+.vercel

@@ -1,0 +1,247 @@
+<!DOCTYPE html>
+<html lang="cs">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Admin | DogAtelier</title>
+    <meta name="robots" content="noindex, nofollow">
+    <style>
+        :root {
+            --color-primary: #8B5A2B;
+            --color-accent: #6B4423;
+            --color-bg: #FAF8F5;
+            --color-text: #333;
+            --color-error: #d32f2f;
+            --color-success: #388e3c;
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: var(--color-bg);
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 1rem;
+        }
+
+        .login-container {
+            background: white;
+            padding: 2.5rem;
+            border-radius: 12px;
+            box-shadow: 0 4px 20px rgba(0, 0, 0, 0.1);
+            width: 100%;
+            max-width: 400px;
+        }
+
+        .logo {
+            text-align: center;
+            margin-bottom: 2rem;
+        }
+
+        .logo h1 {
+            font-size: 1.8rem;
+            color: var(--color-primary);
+            font-weight: 600;
+        }
+
+        .logo span {
+            font-size: 0.9rem;
+            color: #666;
+            display: block;
+            margin-top: 0.3rem;
+        }
+
+        .form-group {
+            margin-bottom: 1.5rem;
+        }
+
+        .form-group label {
+            display: block;
+            margin-bottom: 0.5rem;
+            font-weight: 500;
+            color: var(--color-text);
+        }
+
+        .form-group input {
+            width: 100%;
+            padding: 0.9rem 1rem;
+            border: 2px solid #e0e0e0;
+            border-radius: 8px;
+            font-size: 1rem;
+            transition: border-color 0.3s;
+        }
+
+        .form-group input:focus {
+            outline: none;
+            border-color: var(--color-primary);
+        }
+
+        .btn-login {
+            width: 100%;
+            padding: 1rem;
+            background: var(--color-primary);
+            color: white;
+            border: none;
+            border-radius: 8px;
+            font-size: 1rem;
+            font-weight: 600;
+            cursor: pointer;
+            transition: background 0.3s;
+        }
+
+        .btn-login:hover {
+            background: var(--color-accent);
+        }
+
+        .btn-login:disabled {
+            background: #ccc;
+            cursor: not-allowed;
+        }
+
+        .error-message {
+            background: #ffebee;
+            color: var(--color-error);
+            padding: 0.8rem 1rem;
+            border-radius: 8px;
+            margin-bottom: 1.5rem;
+            display: none;
+            font-size: 0.9rem;
+        }
+
+        .error-message.show {
+            display: block;
+        }
+
+        .back-link {
+            text-align: center;
+            margin-top: 1.5rem;
+        }
+
+        .back-link a {
+            color: #666;
+            text-decoration: none;
+            font-size: 0.9rem;
+        }
+
+        .back-link a:hover {
+            color: var(--color-primary);
+        }
+
+        .loading {
+            display: inline-block;
+            width: 20px;
+            height: 20px;
+            border: 2px solid #fff;
+            border-radius: 50%;
+            border-top-color: transparent;
+            animation: spin 0.8s linear infinite;
+            margin-right: 0.5rem;
+            vertical-align: middle;
+        }
+
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+    </style>
+</head>
+<body>
+    <div class="login-container">
+        <div class="logo">
+            <h1>DogAtelier</h1>
+            <span>Administrace</span>
+        </div>
+
+        <div id="errorMessage" class="error-message"></div>
+
+        <form id="loginForm">
+            <div class="form-group">
+                <label for="password">Heslo</label>
+                <input type="password" id="password" name="password" required autocomplete="current-password">
+            </div>
+
+            <button type="submit" class="btn-login" id="submitBtn">
+                Prihlasit se
+            </button>
+        </form>
+
+        <div class="back-link">
+            <a href="/">&larr; Zpet na web</a>
+        </div>
+    </div>
+
+    <script>
+        const form = document.getElementById('loginForm');
+        const errorMessage = document.getElementById('errorMessage');
+        const submitBtn = document.getElementById('submitBtn');
+
+        form.addEventListener('submit', async (e) => {
+            e.preventDefault();
+
+            const password = document.getElementById('password').value;
+
+            // Disable button and show loading
+            submitBtn.disabled = true;
+            submitBtn.innerHTML = '<span class="loading"></span>Prihlasuji...';
+            errorMessage.classList.remove('show');
+
+            try {
+                const response = await fetch('/api/auth', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({ password })
+                });
+
+                const data = await response.json();
+
+                if (data.success) {
+                    // Store token and redirect
+                    localStorage.setItem('adminToken', data.token);
+                    window.location.href = '/admin/dashboard.html';
+                } else {
+                    errorMessage.textContent = data.message || 'Neplatne heslo';
+                    errorMessage.classList.add('show');
+                    submitBtn.disabled = false;
+                    submitBtn.textContent = 'Prihlasit se';
+                }
+            } catch (error) {
+                errorMessage.textContent = 'Chyba pripojeni. Zkuste to znovu.';
+                errorMessage.classList.add('show');
+                submitBtn.disabled = false;
+                submitBtn.textContent = 'Prihlasit se';
+            }
+        });
+
+        // Check if already logged in
+        const token = localStorage.getItem('adminToken');
+        if (token) {
+            // Verify token is still valid
+            fetch('/api/auth', {
+                method: 'GET',
+                headers: {
+                    'Authorization': `Bearer ${token}`
+                }
+            })
+            .then(res => res.json())
+            .then(data => {
+                if (data.valid) {
+                    window.location.href = '/admin/dashboard.html';
+                } else {
+                    localStorage.removeItem('adminToken');
+                }
+            })
+            .catch(() => {
+                localStorage.removeItem('adminToken');
+            });
+        }
+    </script>
+</body>
+</html>
