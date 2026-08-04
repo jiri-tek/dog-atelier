@@ -50,6 +50,10 @@ function doGet(e) {
         return output.setContent(JSON.stringify(getReservations()));
       case 'getGallery':
         return output.setContent(JSON.stringify(getGallery()));
+      case 'getClosedDays':
+        return output.setContent(JSON.stringify(getClosedDays()));
+      case 'getDaysForMonth':
+        return output.setContent(JSON.stringify(getAllDaysForMonth(e.parameter.month)));
       default:
         return output.setContent(JSON.stringify({
           success: false,
@@ -91,6 +95,8 @@ function doPost(e) {
         return output.setContent(JSON.stringify(addGalleryImage(data.url, data.alt, data.publicId)));
       case 'deleteGalleryImage':
         return output.setContent(JSON.stringify(deleteGalleryImage(data.imageId)));
+      case 'setClosedDay':
+        return output.setContent(JSON.stringify(setClosedDay(data.date, data.isFullDay, data.closedHours)));
       default:
         return output.setContent(JSON.stringify({
           success: false,
@@ -510,6 +516,225 @@ Tel: +420 736 477 981
     });
   } catch (e) {
     console.log('Failed to send cancellation email:', e);
+  }
+}
+
+// ============ CLOSED DAYS ============
+function getClosedDays() {
+  const spreadsheet = SpreadsheetApp.openById(CONFIG.SHEET_ID);
+  const closedSheet = spreadsheet.getSheetByName('Zavřeno');
+
+  if (!closedSheet) {
+    return { success: false, message: 'Sheet Zavřeno nenalezen' };
+  }
+
+  const data = closedSheet.getDataRange().getValues();
+  const headers = data[0];
+
+  // Get time slot headers (columns from index 3 onwards)
+  const timeSlots = [];
+  for (let c = 3; c < headers.length; c++) {
+    const headerVal = headers[c];
+    let hour;
+    if (typeof headerVal.getHours === 'function') {
+      hour = headerVal.getHours();
+    } else {
+      hour = parseInt(headerVal.toString().split(':')[0]);
+    }
+    if (!isNaN(hour)) {
+      timeSlots.push({ col: c, hour: hour, label: hour + ':00' });
+    }
+  }
+
+  const closedDays = [];
+
+  // Parse each row (skip header)
+  for (let i = 1; i < data.length; i++) {
+    const row = data[i];
+    const dateValue = row[0];
+
+    if (!dateValue) continue;
+
+    // Parse date
+    let dateStr;
+    if (typeof dateValue.getFullYear === 'function') {
+      dateStr = Utilities.formatDate(dateValue, 'Europe/Prague', 'd.M.yyyy');
+    } else {
+      dateStr = dateValue.toString();
+    }
+
+    const dayName = row[1] || '';
+    const isFullDay = row[2] === true;
+
+    // Get closed time slots
+    const closedHours = [];
+    for (const slot of timeSlots) {
+      if (row[slot.col] === true) {
+        closedHours.push(slot.hour);
+      }
+    }
+
+    // Only include if something is closed
+    if (isFullDay || closedHours.length > 0) {
+      closedDays.push({
+        rowIndex: i + 1,
+        date: dateStr,
+        dayName: dayName,
+        isFullDay: isFullDay,
+        closedHours: closedHours
+      });
+    }
+  }
+
+  return {
+    success: true,
+    closedDays: closedDays,
+    timeSlots: timeSlots.map(s => s.label)
+  };
+}
+
+function getAllDaysForMonth(yearMonth) {
+  // yearMonth format: "2026-08"
+  const spreadsheet = SpreadsheetApp.openById(CONFIG.SHEET_ID);
+  const closedSheet = spreadsheet.getSheetByName('Zavřeno');
+
+  if (!closedSheet) {
+    return { success: false, message: 'Sheet Zavřeno nenalezen' };
+  }
+
+  const data = closedSheet.getDataRange().getValues();
+  const headers = data[0];
+
+  // Get time slot headers
+  const timeSlots = [];
+  for (let c = 3; c < headers.length; c++) {
+    const headerVal = headers[c];
+    let hour;
+    if (typeof headerVal.getHours === 'function') {
+      hour = headerVal.getHours();
+    } else {
+      hour = parseInt(headerVal.toString().split(':')[0]);
+    }
+    if (!isNaN(hour)) {
+      timeSlots.push({ col: c, hour: hour, label: hour + ':00' });
+    }
+  }
+
+  const [targetYear, targetMonth] = yearMonth.split('-').map(Number);
+  const days = [];
+
+  for (let i = 1; i < data.length; i++) {
+    const row = data[i];
+    const dateValue = row[0];
+
+    if (!dateValue) continue;
+
+    let date;
+    if (typeof dateValue.getFullYear === 'function') {
+      date = dateValue;
+    } else {
+      const parts = dateValue.toString().split('.');
+      if (parts.length === 3) {
+        date = new Date(parseInt(parts[2]), parseInt(parts[1]) - 1, parseInt(parts[0]));
+      } else {
+        continue;
+      }
+    }
+
+    // Filter by month
+    if (date.getFullYear() !== targetYear || (date.getMonth() + 1) !== targetMonth) {
+      continue;
+    }
+
+    const dateStr = Utilities.formatDate(date, 'Europe/Prague', 'd.M.yyyy');
+    const isFullDay = row[2] === true;
+
+    const closedHours = [];
+    for (const slot of timeSlots) {
+      if (row[slot.col] === true) {
+        closedHours.push(slot.hour);
+      }
+    }
+
+    days.push({
+      rowIndex: i + 1,
+      date: dateStr,
+      dayName: row[1] || '',
+      day: date.getDate(),
+      isFullDay: isFullDay,
+      closedHours: closedHours
+    });
+  }
+
+  return {
+    success: true,
+    days: days,
+    timeSlots: timeSlots.map(s => s.label)
+  };
+}
+
+function setClosedDay(dateStr, isFullDay, closedHours) {
+  const spreadsheet = SpreadsheetApp.openById(CONFIG.SHEET_ID);
+  const closedSheet = spreadsheet.getSheetByName('Zavřeno');
+
+  if (!closedSheet) {
+    return { success: false, message: 'Sheet Zavřeno nenalezen' };
+  }
+
+  const data = closedSheet.getDataRange().getValues();
+  const headers = data[0];
+
+  // Find the row for this date
+  let rowIndex = -1;
+  for (let i = 1; i < data.length; i++) {
+    const dateValue = data[i][0];
+    let currentDate;
+
+    if (typeof dateValue.getFullYear === 'function') {
+      currentDate = Utilities.formatDate(dateValue, 'Europe/Prague', 'd.M.yyyy');
+    } else {
+      currentDate = dateValue.toString();
+    }
+
+    if (currentDate === dateStr) {
+      rowIndex = i + 1;
+      break;
+    }
+  }
+
+  if (rowIndex === -1) {
+    return { success: false, message: 'Datum nenalezeno v listu Zavřeno' };
+  }
+
+  try {
+    // Set full day checkbox (column C = 3)
+    closedSheet.getRange(rowIndex, 3).setValue(isFullDay === true);
+
+    // Get time slot columns
+    const timeSlots = [];
+    for (let c = 3; c < headers.length; c++) {
+      const headerVal = headers[c];
+      let hour;
+      if (typeof headerVal.getHours === 'function') {
+        hour = headerVal.getHours();
+      } else {
+        hour = parseInt(headerVal.toString().split(':')[0]);
+      }
+      if (!isNaN(hour)) {
+        timeSlots.push({ col: c + 1, hour: hour }); // +1 for 1-indexed
+      }
+    }
+
+    // Set time slot checkboxes
+    for (const slot of timeSlots) {
+      const isChecked = closedHours && closedHours.includes(slot.hour);
+      closedSheet.getRange(rowIndex, slot.col).setValue(isChecked === true);
+    }
+
+    return { success: true, message: 'Uloženo' };
+
+  } catch (error) {
+    return { success: false, message: error.toString() };
   }
 }
 

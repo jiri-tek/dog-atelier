@@ -616,6 +616,7 @@
 
     <nav class="tabs">
         <div class="tab active" data-tab="reservations">Rezervace</div>
+        <div class="tab" data-tab="openinghours">Oteviraci doba</div>
         <div class="tab" data-tab="gallery">Galerie</div>
     </nav>
 
@@ -668,6 +669,59 @@
                             <div class="loading">
                                 <div class="spinner"></div>
                                 <p>Nacitam rezervace...</p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Opening Hours Tab -->
+        <div id="openinghours" class="tab-content">
+            <div class="layout-grid">
+                <!-- Calendar for selecting days -->
+                <div class="calendar-container">
+                    <div class="calendar-header">
+                        <h3 id="closedCalendarMonth">Srpen 2026</h3>
+                        <div class="calendar-nav">
+                            <button onclick="changeClosedMonth(-1)">&larr;</button>
+                            <button onclick="changeClosedMonth(1)">&rarr;</button>
+                        </div>
+                    </div>
+                    <div class="calendar-grid" id="closedCalendarGrid"></div>
+                    <div style="margin-top: 1rem; font-size: 0.8rem; color: var(--color-text-light);">
+                        <div style="display: flex; align-items: center; gap: 0.5rem; margin-bottom: 0.3rem;">
+                            <span style="width: 12px; height: 12px; background: #FFCCCC; border-radius: 2px;"></span>
+                            <span>Zavreno cely den</span>
+                        </div>
+                        <div style="display: flex; align-items: center; gap: 0.5rem;">
+                            <span style="width: 12px; height: 12px; background: #FFE0B2; border-radius: 2px;"></span>
+                            <span>Castecne zavreno</span>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Day editor -->
+                <div>
+                    <div class="table-container">
+                        <div class="table-header">
+                            <h2 id="closedDayTitle">Vyberte den v kalendari</h2>
+                            <button class="btn btn-secondary" onclick="loadClosedDays()">Obnovit</button>
+                        </div>
+                        <div id="closedDayEditor" style="padding: 1.5rem;">
+                            <p style="color: var(--color-text-light);">Kliknete na den v kalendari pro upravu oteviraci doby.</p>
+                        </div>
+                    </div>
+
+                    <!-- Closed days list -->
+                    <div class="table-container" style="margin-top: 1.5rem;">
+                        <div class="table-header">
+                            <h2>Nadchazejici zavrene dny</h2>
+                        </div>
+                        <div id="closedDaysList">
+                            <div class="loading">
+                                <div class="spinner"></div>
+                                <p>Nacitam...</p>
                             </div>
                         </div>
                     </div>
@@ -825,6 +879,10 @@
 
                 if (tab.dataset.tab === 'gallery') {
                     loadGallery();
+                }
+                if (tab.dataset.tab === 'openinghours') {
+                    loadClosedDays();
+                    loadMonthDays();
                 }
             });
         });
@@ -1278,6 +1336,298 @@
             } catch (error) {
                 alert('Chyba pripojeni');
             }
+        }
+
+        // ============ CLOSED DAYS ============
+        let closedMonth = new Date();
+        let closedDaysData = [];
+        let monthDaysData = [];
+        let availableTimeSlots = [];
+        let selectedClosedDate = null;
+
+        async function loadClosedDays() {
+            const listContainer = document.getElementById('closedDaysList');
+            listContainer.innerHTML = '<div class="loading"><div class="spinner"></div><p>Nacitam...</p></div>';
+
+            try {
+                const response = await fetch('/api/closed-days', {
+                    headers: { 'Authorization': `Bearer ${token}` }
+                });
+
+                const data = await response.json();
+
+                if (data.success) {
+                    closedDaysData = data.closedDays || [];
+                    availableTimeSlots = data.timeSlots || [];
+                    renderClosedDaysList();
+                } else {
+                    listContainer.innerHTML = '<div class="empty-state"><p>Chyba: ' + data.message + '</p></div>';
+                }
+            } catch (error) {
+                listContainer.innerHTML = '<div class="empty-state"><p>Chyba pripojeni</p></div>';
+            }
+        }
+
+        async function loadMonthDays() {
+            const yearMonth = `${closedMonth.getFullYear()}-${String(closedMonth.getMonth() + 1).padStart(2, '0')}`;
+
+            try {
+                const response = await fetch(`/api/closed-days?month=${yearMonth}`, {
+                    headers: { 'Authorization': `Bearer ${token}` }
+                });
+
+                const data = await response.json();
+
+                if (data.success) {
+                    monthDaysData = data.days || [];
+                    availableTimeSlots = data.timeSlots || [];
+                    renderClosedCalendar();
+                }
+            } catch (error) {
+                console.error('Error loading month days:', error);
+            }
+        }
+
+        function renderClosedCalendar() {
+            const year = closedMonth.getFullYear();
+            const month = closedMonth.getMonth();
+
+            document.getElementById('closedCalendarMonth').textContent = `${MONTHS[month]} ${year}`;
+
+            const firstDay = new Date(year, month, 1);
+            const lastDay = new Date(year, month + 1, 0);
+
+            let startDay = firstDay.getDay() - 1;
+            if (startDay < 0) startDay = 6;
+
+            const today = new Date();
+            const todayKey = getDateKey(today);
+
+            // Build lookup for closed days
+            const closedLookup = {};
+            monthDaysData.forEach(d => {
+                closedLookup[d.day] = d;
+            });
+
+            let html = DAYS.map(d => `<div class="calendar-day-name">${d}</div>`).join('');
+
+            // Previous month days
+            const prevMonth = new Date(year, month, 0);
+            for (let i = startDay - 1; i >= 0; i--) {
+                const day = prevMonth.getDate() - i;
+                html += `<div class="calendar-day other-month">${day}</div>`;
+            }
+
+            // Current month days
+            for (let day = 1; day <= lastDay.getDate(); day++) {
+                const dateKey = `${year}-${(month + 1).toString().padStart(2, '0')}-${day.toString().padStart(2, '0')}`;
+                const dayData = closedLookup[day];
+                const isToday = dateKey === todayKey;
+                const isWeekend = new Date(year, month, day).getDay() === 0 || new Date(year, month, day).getDay() === 6;
+
+                let classes = 'calendar-day';
+                let style = '';
+
+                if (isWeekend) {
+                    classes += ' other-month';
+                } else if (dayData) {
+                    if (dayData.isFullDay) {
+                        style = 'background: #FFCCCC;';
+                    } else if (dayData.closedHours && dayData.closedHours.length > 0) {
+                        style = 'background: #FFE0B2;';
+                    }
+                }
+
+                if (isToday) classes += ' today';
+
+                const dateStr = `${day}.${month + 1}.${year}`;
+
+                if (!isWeekend) {
+                    html += `<div class="${classes}" style="${style}" onclick="selectClosedDay('${dateStr}')">${day}</div>`;
+                } else {
+                    html += `<div class="${classes}">${day}</div>`;
+                }
+            }
+
+            // Next month days
+            const totalCells = startDay + lastDay.getDate();
+            const remaining = totalCells % 7 === 0 ? 0 : 7 - (totalCells % 7);
+            for (let day = 1; day <= remaining; day++) {
+                html += `<div class="calendar-day other-month">${day}</div>`;
+            }
+
+            document.getElementById('closedCalendarGrid').innerHTML = html;
+        }
+
+        function changeClosedMonth(delta) {
+            closedMonth.setMonth(closedMonth.getMonth() + delta);
+            loadMonthDays();
+        }
+
+        function selectClosedDay(dateStr) {
+            selectedClosedDate = dateStr;
+            document.getElementById('closedDayTitle').textContent = dateStr;
+
+            // Find day data
+            const parts = dateStr.split('.');
+            const day = parseInt(parts[0]);
+            const dayData = monthDaysData.find(d => d.day === day);
+
+            renderDayEditor(dateStr, dayData);
+        }
+
+        function renderDayEditor(dateStr, dayData) {
+            const container = document.getElementById('closedDayEditor');
+            const isFullDay = dayData ? dayData.isFullDay : false;
+            const closedHours = dayData ? (dayData.closedHours || []) : [];
+
+            let html = `
+                <div class="form-group">
+                    <label style="display: flex; align-items: center; gap: 0.5rem; cursor: pointer;">
+                        <input type="checkbox" id="fullDayCheck" ${isFullDay ? 'checked' : ''} onchange="toggleFullDay()">
+                        <strong>Zavreno cely den</strong>
+                    </label>
+                </div>
+
+                <div id="timeSlotContainer" style="margin-top: 1rem; ${isFullDay ? 'opacity: 0.5; pointer-events: none;' : ''}">
+                    <p style="font-size: 0.9rem; margin-bottom: 0.75rem; color: var(--color-text-light);">Nebo vyberte konkretni hodiny:</p>
+                    <div style="display: grid; grid-template-columns: repeat(auto-fill, minmax(80px, 1fr)); gap: 0.5rem;">
+            `;
+
+            availableTimeSlots.forEach(slot => {
+                const hour = parseInt(slot.split(':')[0]);
+                const isChecked = closedHours.includes(hour);
+                html += `
+                    <label style="display: flex; align-items: center; gap: 0.3rem; padding: 0.5rem; background: ${isChecked ? '#FFE0B2' : 'var(--color-bg)'}; border-radius: 6px; cursor: pointer;">
+                        <input type="checkbox" class="hourCheck" data-hour="${hour}" ${isChecked ? 'checked' : ''}>
+                        ${slot}
+                    </label>
+                `;
+            });
+
+            html += `
+                    </div>
+                </div>
+
+                <div style="margin-top: 1.5rem;">
+                    <button class="btn btn-primary" onclick="saveClosedDay()">Ulozit</button>
+                    <button class="btn btn-secondary" onclick="clearClosedDay()">Otevrit vse</button>
+                </div>
+            `;
+
+            container.innerHTML = html;
+        }
+
+        function toggleFullDay() {
+            const isFullDay = document.getElementById('fullDayCheck').checked;
+            const container = document.getElementById('timeSlotContainer');
+            container.style.opacity = isFullDay ? '0.5' : '1';
+            container.style.pointerEvents = isFullDay ? 'none' : 'auto';
+        }
+
+        async function saveClosedDay() {
+            if (!selectedClosedDate) return;
+
+            const isFullDay = document.getElementById('fullDayCheck').checked;
+            const closedHours = [];
+
+            document.querySelectorAll('.hourCheck:checked').forEach(cb => {
+                closedHours.push(parseInt(cb.dataset.hour));
+            });
+
+            try {
+                const response = await fetch('/api/closed-days', {
+                    method: 'POST',
+                    headers: {
+                        'Authorization': `Bearer ${token}`,
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({
+                        date: selectedClosedDate,
+                        isFullDay: isFullDay,
+                        closedHours: isFullDay ? [] : closedHours
+                    })
+                });
+
+                const data = await response.json();
+
+                if (data.success) {
+                    loadMonthDays();
+                    loadClosedDays();
+                    alert('Ulozeno!');
+                } else {
+                    alert('Chyba: ' + data.message);
+                }
+            } catch (error) {
+                alert('Chyba pripojeni');
+            }
+        }
+
+        async function clearClosedDay() {
+            if (!selectedClosedDate) return;
+
+            try {
+                const response = await fetch('/api/closed-days', {
+                    method: 'POST',
+                    headers: {
+                        'Authorization': `Bearer ${token}`,
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({
+                        date: selectedClosedDate,
+                        isFullDay: false,
+                        closedHours: []
+                    })
+                });
+
+                const data = await response.json();
+
+                if (data.success) {
+                    loadMonthDays();
+                    loadClosedDays();
+                    selectClosedDay(selectedClosedDate);
+                    alert('Otevreno!');
+                } else {
+                    alert('Chyba: ' + data.message);
+                }
+            } catch (error) {
+                alert('Chyba pripojeni');
+            }
+        }
+
+        function renderClosedDaysList() {
+            const container = document.getElementById('closedDaysList');
+
+            if (closedDaysData.length === 0) {
+                container.innerHTML = '<div class="empty-state"><p>Zadne zavrene dny</p></div>';
+                return;
+            }
+
+            // Sort by date
+            const sortedDays = [...closedDaysData].sort((a, b) => {
+                const [ad, am, ay] = a.date.split('.').map(Number);
+                const [bd, bm, by] = b.date.split('.').map(Number);
+                return new Date(ay, am - 1, ad) - new Date(by, bm - 1, bd);
+            });
+
+            let html = '<table><thead><tr><th>Datum</th><th>Den</th><th>Typ</th></tr></thead><tbody>';
+
+            sortedDays.forEach(day => {
+                const typeText = day.isFullDay
+                    ? 'Cely den'
+                    : `${day.closedHours.map(h => h + ':00').join(', ')}`;
+
+                html += `
+                    <tr onclick="selectClosedDay('${day.date}')" style="cursor: pointer;">
+                        <td>${day.date}</td>
+                        <td>${day.dayName}</td>
+                        <td>${typeText}</td>
+                    </tr>
+                `;
+            });
+
+            html += '</tbody></table>';
+            container.innerHTML = html;
         }
 
         // Logout
