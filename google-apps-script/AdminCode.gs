@@ -33,12 +33,16 @@ function doGet(e) {
     switch (action) {
       case 'getReservations':
         return output.setContent(JSON.stringify(getReservations()));
+      case 'getReservationsFromCalendar':
+        return output.setContent(JSON.stringify(getReservationsFromCalendar()));
       case 'getGallery':
         return output.setContent(JSON.stringify(getGallery()));
       case 'getClosedDays':
         return output.setContent(JSON.stringify(getClosedDays()));
       case 'getDaysForMonth':
         return output.setContent(JSON.stringify(getAllDaysForMonth(e.parameter.month)));
+      case 'syncCalendar':
+        return output.setContent(JSON.stringify(syncFromCalendar()));
       default:
         return output.setContent(JSON.stringify({ success: false, message: 'Unknown action' }));
     }
@@ -147,6 +151,107 @@ function getReservations() {
     .sort((a, b) => a.parsedDate - b.parsedDate);
 
   return { success: true, reservations: upcoming, total: reservations.length };
+}
+
+// Get reservations directly from Google Calendar (faster, real-time)
+function getReservationsFromCalendar() {
+  const calendar = CalendarApp.getCalendarById(CONFIG.CALENDAR_ID);
+  if (!calendar) {
+    return { success: false, message: 'Kalendář nenalezen' };
+  }
+
+  const now = new Date();
+  const yesterday = new Date(now.getTime() - 24 * 60 * 60 * 1000);
+  const threeMonthsLater = new Date(now.getTime() + 90 * 24 * 60 * 60 * 1000);
+
+  const events = calendar.getEvents(yesterday, threeMonthsLater);
+  const reservations = [];
+
+  // Also load sheet data for additional info (email, phone, etc.)
+  const sheet = SpreadsheetApp.openById(CONFIG.SHEET_ID).getSheetByName(CONFIG.RESERVATIONS_SHEET);
+  const sheetData = sheet ? sheet.getDataRange().getValues() : [];
+  const headers = sheetData.length > 0 ? sheetData[0] : [];
+
+  // Build eventId to row data mapping
+  const eventIdCol = headers.indexOf('Event ID');
+  const eventDataMap = {};
+  if (eventIdCol !== -1) {
+    for (let i = 1; i < sheetData.length; i++) {
+      const eventId = sheetData[i][eventIdCol];
+      if (eventId) {
+        eventDataMap[eventId] = {
+          rowIndex: i + 1,
+          email: sheetData[i][headers.indexOf('Email')] || '',
+          phone: sheetData[i][headers.indexOf('Telefon')] || '',
+          breed: sheetData[i][headers.indexOf('Plemeno')] || '',
+          notes: sheetData[i][headers.indexOf('Poznámky') !== -1 ? headers.indexOf('Poznámky') : headers.indexOf('Poznamky')] || '',
+          status: sheetData[i][headers.indexOf('Status')] || 'active'
+        };
+      }
+    }
+  }
+
+  for (const event of events) {
+    const eventId = event.getId();
+    const title = event.getTitle();
+    const startTime = event.getStartTime();
+    const description = event.getDescription() || '';
+
+    // Parse title: "Service - FirstName LastName"
+    const titleParts = title.split(' - ');
+    const service = titleParts[0] || '';
+    const nameParts = (titleParts[1] || '').split(' ');
+    const firstName = nameParts[0] || '';
+    const lastName = nameParts.slice(1).join(' ') || '';
+
+    // Get additional data from sheet if available
+    const sheetInfo = eventDataMap[eventId] || {};
+
+    // Skip cancelled reservations
+    if (sheetInfo.status === 'cancelled' || sheetInfo.status === 'cancelled-from-calendar') {
+      continue;
+    }
+
+    // Parse description for contact info if not in sheet
+    let email = sheetInfo.email || '';
+    let phone = sheetInfo.phone || '';
+    let breed = sheetInfo.breed || '';
+    let notes = sheetInfo.notes || '';
+
+    if (!email || !phone) {
+      const lines = description.split('\n');
+      for (const line of lines) {
+        if (line.startsWith('Email:')) email = email || line.replace('Email:', '').trim();
+        if (line.startsWith('Telefon:')) phone = phone || line.replace('Telefon:', '').trim();
+        if (line.startsWith('Plemeno:')) breed = breed || line.replace('Plemeno:', '').trim();
+        if (line.startsWith('Poznamky:')) notes = notes || line.replace('Poznamky:', '').trim();
+      }
+    }
+
+    reservations.push({
+      eventId: eventId,
+      rowIndex: sheetInfo.rowIndex || null,
+      firstName: firstName,
+      lastName: lastName,
+      email: email,
+      phone: phone,
+      date: Utilities.formatDate(startTime, 'Europe/Prague', 'yyyy-MM-dd'),
+      time: Utilities.formatDate(startTime, 'Europe/Prague', 'HH:mm'),
+      displayDate: Utilities.formatDate(startTime, 'Europe/Prague', 'd.M.yyyy'),
+      service: service,
+      breed: breed,
+      notes: notes,
+      status: sheetInfo.status || 'active',
+      parsedDate: startTime,
+      datetime: startTime.toISOString(),
+      source: 'calendar'
+    });
+  }
+
+  // Sort by date
+  reservations.sort((a, b) => a.parsedDate - b.parsedDate);
+
+  return { success: true, reservations: reservations, total: reservations.length, source: 'calendar' };
 }
 
 function formatDate(date) {

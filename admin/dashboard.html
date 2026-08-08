@@ -1898,6 +1898,45 @@
 
         // Initial load
         loadReservations();
+
+        // Auto-refresh reservations every 30 seconds
+        let autoRefreshInterval = null;
+        let lastRefreshTime = Date.now();
+
+        function startAutoRefresh() {
+            if (autoRefreshInterval) return;
+            autoRefreshInterval = setInterval(() => {
+                // Only refresh if tab is visible and not editing
+                if (!document.hidden && !document.querySelector('.modal-overlay[style*="flex"]')) {
+                    loadReservations();
+                    lastRefreshTime = Date.now();
+                }
+            }, 30000); // 30 seconds
+        }
+
+        function stopAutoRefresh() {
+            if (autoRefreshInterval) {
+                clearInterval(autoRefreshInterval);
+                autoRefreshInterval = null;
+            }
+        }
+
+        // Start auto-refresh
+        startAutoRefresh();
+
+        // Pause when tab is hidden, resume when visible
+        document.addEventListener('visibilitychange', () => {
+            if (document.hidden) {
+                stopAutoRefresh();
+            } else {
+                // Refresh immediately if more than 30s passed
+                if (Date.now() - lastRefreshTime > 30000) {
+                    loadReservations();
+                    lastRefreshTime = Date.now();
+                }
+                startAutoRefresh();
+            }
+        });
     </script>
 </body>
 </html>

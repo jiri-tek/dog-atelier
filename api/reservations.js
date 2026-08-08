@@ -68,9 +68,12 @@ module.exports = async function handler(req, res) {
     }
 
     try {
-        // GET - List reservations
+        // GET - List reservations (from calendar for real-time data)
         if (req.method === 'GET') {
-            const response = await fetch(`${adminScriptUrl}?action=getReservations&apiKey=${adminApiKey}`);
+            const source = req.query.source || 'calendar';
+            const action = source === 'sheet' ? 'getReservations' : 'getReservationsFromCalendar';
+
+            const response = await fetch(`${adminScriptUrl}?action=${action}&apiKey=${adminApiKey}`);
             const data = await response.json();
 
             return res.status(200).json(data);
