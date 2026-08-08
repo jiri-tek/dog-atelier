@@ -962,8 +962,8 @@
                     loadGallery();
                 }
                 if (tab.dataset.tab === 'openinghours') {
-                    loadClosedDays();
-                    loadMonthDays();
+                    // Load both in parallel for faster loading
+                    Promise.all([loadClosedDays(), loadMonthDays()]);
                 }
             });
         });
@@ -1926,6 +1926,13 @@
 
         // Initial load
         loadReservations();
+
+        // Prefetch other tab data in background for faster tab switching
+        setTimeout(() => {
+            // Silently preload gallery and opening hours data
+            fetch('/api/gallery', { headers: { 'Authorization': `Bearer ${token}` } }).catch(() => {});
+            fetch('/api/closed-days', { headers: { 'Authorization': `Bearer ${token}` } }).catch(() => {});
+        }, 2000); // Wait 2s after page load to avoid blocking
 
         // Auto-refresh reservations every 30 seconds
         let autoRefreshInterval = null;
