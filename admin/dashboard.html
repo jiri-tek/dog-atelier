@@ -1684,8 +1684,20 @@
                 const data = await response.json();
 
                 if (data.success) {
+                    // Update local data without full reload
+                    const updatedDates = days.map(d => d.date);
+                    days.forEach(day => {
+                        const parts = day.date.split('.');
+                        const dayNum = parseInt(parts[0]);
+                        const existing = monthDaysData.find(d => d.day === dayNum);
+                        if (existing) {
+                            existing.isFullDay = day.isFullDay;
+                            existing.closedHours = day.closedHours || [];
+                        }
+                    });
                     clearSelection();
-                    loadMonthDays();
+                    renderClosedCalendar();
+                    // Reload closed days list in background
                     loadClosedDays();
                     alert(successMessage + '!');
                 } else {
@@ -1784,8 +1796,16 @@
                 const data = await response.json();
 
                 if (data.success) {
-                    loadMonthDays();
-                    loadClosedDays();
+                    // Update local data without full reload
+                    const parts = selectedClosedDate.split('.');
+                    const dayNum = parseInt(parts[0]);
+                    const existing = monthDaysData.find(d => d.day === dayNum);
+                    if (existing) {
+                        existing.isFullDay = isFullDay;
+                        existing.closedHours = closedHours;
+                    }
+                    renderClosedCalendar();
+                    loadClosedDays(); // Background update for list
                     alert('Ulozeno!');
                 } else {
                     alert('Chyba: ' + data.message);
@@ -1815,9 +1835,17 @@
                 const data = await response.json();
 
                 if (data.success) {
-                    loadMonthDays();
-                    loadClosedDays();
+                    // Update local data without full reload
+                    const parts = selectedClosedDate.split('.');
+                    const dayNum = parseInt(parts[0]);
+                    const existing = monthDaysData.find(d => d.day === dayNum);
+                    if (existing) {
+                        existing.isFullDay = false;
+                        existing.closedHours = [];
+                    }
+                    renderClosedCalendar();
                     selectClosedDay(selectedClosedDate);
+                    loadClosedDays(); // Background update
                     alert('Otevreno!');
                 } else {
                     alert('Chyba: ' + data.message);

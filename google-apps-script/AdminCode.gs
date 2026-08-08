@@ -577,8 +577,7 @@ function setClosedDay(dateStr, isFullDay, closedHours) {
   if (rowIndex === -1) return { success: false, message: 'Datum nenalezeno v listu Zavřeno' };
 
   try {
-    closedSheet.getRange(rowIndex, 3).setValue(isFullDay === true);
-
+    // Build time slots mapping
     const timeSlots = [];
     for (let c = 3; c < headers.length; c++) {
       const headerVal = headers[c];
@@ -589,14 +588,25 @@ function setClosedDay(dateStr, isFullDay, closedHours) {
         hour = parseInt(headerVal.toString().split(':')[0]);
       }
       if (!isNaN(hour)) {
-        timeSlots.push({ col: c + 1, hour: hour });
+        timeSlots.push({ col: c, hour: hour });
       }
     }
 
+    // Prepare row data for batch write (from column 3 onwards)
+    const numCols = headers.length - 2; // columns from 3 to end
+    const rowData = [];
+
+    // First value is isFullDay (column 3, index 0 in our array)
+    rowData.push(isFullDay === true);
+
+    // Rest are time slot checkboxes
     for (const slot of timeSlots) {
       const isChecked = closedHours && closedHours.includes(slot.hour);
-      closedSheet.getRange(rowIndex, slot.col).setValue(isChecked === true);
+      rowData.push(isChecked === true);
     }
+
+    // Single batch write for entire row
+    closedSheet.getRange(rowIndex, 3, 1, rowData.length).setValues([rowData]);
 
     return { success: true, message: 'Uloženo' };
   } catch (error) {
@@ -604,7 +614,7 @@ function setClosedDay(dateStr, isFullDay, closedHours) {
   }
 }
 
-// Bulk update multiple days at once - much faster than individual updates
+// Bulk update multiple days at once - optimized with batch writes
 function setClosedDaysBulk(days) {
   if (!days || !Array.isArray(days) || days.length === 0) {
     return { success: false, message: 'Žádné dny k aktualizaci' };
@@ -629,12 +639,12 @@ function setClosedDaysBulk(days) {
       hour = parseInt(headerVal.toString().split(':')[0]);
     }
     if (!isNaN(hour)) {
-      timeSlots.push({ col: c + 1, hour: hour });
+      timeSlots.push({ col: c, hour: hour });
     }
   }
 
-  // Build date to row index mapping
-  const dateToRow = {};
+  // Build date to row index mapping (0-based for array access)
+  const dateToArrayIndex = {};
   for (let i = 1; i < data.length; i++) {
     const dateValue = data[i][0];
     let currentDate;
@@ -643,30 +653,37 @@ function setClosedDaysBulk(days) {
     } else {
       currentDate = dateValue.toString();
     }
-    dateToRow[currentDate] = i + 1;
+    dateToArrayIndex[currentDate] = i;
   }
 
   try {
     let updated = 0;
     let notFound = [];
 
+    // Modify data array directly
     for (const day of days) {
-      const rowIndex = dateToRow[day.date];
-      if (!rowIndex) {
+      const arrayIndex = dateToArrayIndex[day.date];
+      if (arrayIndex === undefined) {
         notFound.push(day.date);
         continue;
       }
 
-      // Set full day checkbox
-      closedSheet.getRange(rowIndex, 3).setValue(day.isFullDay === true);
+      // Update full day checkbox (column index 2)
+      data[arrayIndex][2] = day.isFullDay === true;
 
-      // Set individual hours
+      // Update individual hours
       for (const slot of timeSlots) {
         const isChecked = day.closedHours && day.closedHours.includes(slot.hour);
-        closedSheet.getRange(rowIndex, slot.col).setValue(isChecked === true);
+        data[arrayIndex][slot.col] = isChecked === true;
       }
 
       updated++;
+    }
+
+    // Single batch write for all changes (skip header row)
+    if (updated > 0) {
+      const writeData = data.slice(1); // Remove header
+      closedSheet.getRange(2, 1, writeData.length, headers.length).setValues(writeData);
     }
 
     if (notFound.length > 0) {
