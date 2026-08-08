@@ -73,6 +73,8 @@ function doPost(e) {
         return output.setContent(JSON.stringify(cancelReservation(data.eventId)));
       case 'addGalleryImage':
         return output.setContent(JSON.stringify(addGalleryImage(data.url, data.alt, data.publicId)));
+      case 'uploadGalleryImage':
+        return output.setContent(JSON.stringify(uploadGalleryImage(data.base64Data, data.fileName, data.mimeType, data.alt)));
       case 'deleteGalleryImage':
         return output.setContent(JSON.stringify(deleteGalleryImage(data.imageId)));
       case 'setClosedDay':
@@ -865,6 +867,51 @@ function deleteGalleryImage(imageId) {
   }
 
   return { success: false, message: 'Image not found' };
+}
+
+function uploadGalleryImage(base64Data, fileName, mimeType, alt) {
+  if (!base64Data || !fileName) {
+    return { success: false, message: 'Missing image data' };
+  }
+
+  try {
+    // Create or get the gallery folder
+    const folderName = 'DogAtelier_Gallery';
+    let folder;
+    const folders = DriveApp.getFoldersByName(folderName);
+    if (folders.hasNext()) {
+      folder = folders.next();
+    } else {
+      folder = DriveApp.createFolder(folderName);
+    }
+
+    // Decode base64 and create file
+    const blob = Utilities.newBlob(Utilities.base64Decode(base64Data), mimeType, fileName);
+    const file = folder.createFile(blob);
+
+    // Make file publicly accessible
+    file.setSharing(DriveApp.Access.ANYONE_WITH_LINK, DriveApp.Permission.VIEW);
+
+    // Get direct image URL (convert Drive URL to direct link)
+    const fileId = file.getId();
+    const directUrl = `https://drive.google.com/uc?export=view&id=${fileId}`;
+
+    // Add to gallery sheet
+    let sheet = SpreadsheetApp.openById(CONFIG.SHEET_ID).getSheetByName(CONFIG.GALLERY_SHEET);
+    if (!sheet) sheet = setupGallerySheet();
+
+    const id = `img-${Date.now()}`;
+    sheet.appendRow([id, directUrl, alt || fileName, fileId]);
+
+    return {
+      success: true,
+      id: id,
+      url: directUrl,
+      message: 'Image uploaded successfully'
+    };
+  } catch (error) {
+    return { success: false, message: 'Upload failed: ' + error.toString() };
+  }
 }
 
 // ============ CALENDAR SYNC ============

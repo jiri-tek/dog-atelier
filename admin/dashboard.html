@@ -814,7 +814,18 @@
         <div id="gallery" class="tab-content">
             <div class="table-header" style="background: var(--color-surface); border-radius: 12px; margin-bottom: 1.5rem; box-shadow: var(--shadow);">
                 <h2>Sprava galerie</h2>
-                <button class="btn btn-primary" onclick="openUploadWidget()">+ Nahrat obrazek</button>
+                <div style="display: flex; gap: 0.5rem;">
+                    <button class="btn btn-primary" onclick="document.getElementById('imageFileInput').click()">+ Nahrat obrazek</button>
+                    <button class="btn btn-secondary" onclick="openUrlUpload()">URL</button>
+                </div>
+                <input type="file" id="imageFileInput" accept="image/jpeg,image/png,image/webp,image/gif" style="display: none;" onchange="handleFileUpload(this)">
+            </div>
+
+            <div id="galleryUploadProgress" style="display: none; padding: 1rem; background: var(--color-surface); border-radius: 8px; margin-bottom: 1rem;">
+                <div style="display: flex; align-items: center; gap: 1rem;">
+                    <div class="spinner"></div>
+                    <span>Nahravam obrazek...</span>
+                </div>
             </div>
 
             <div id="galleryGrid" class="gallery-grid">
@@ -1390,13 +1401,83 @@
             `;
         }
 
-        function openUploadWidget() {
+        function openUrlUpload() {
             const url = prompt('Zadejte URL obrazku:\n(napr. z Google Drive, Cloudinary, nebo jiny hosting)');
             if (!url || !url.trim()) return;
 
             const alt = prompt('Popis obrazku (volitelne):', '') || '';
 
             addGalleryImage(url.trim(), alt.trim());
+        }
+
+        async function handleFileUpload(input) {
+            const file = input.files[0];
+            if (!file) return;
+
+            // Validate file type
+            const allowedTypes = ['image/jpeg', 'image/png', 'image/webp', 'image/gif'];
+            if (!allowedTypes.includes(file.type)) {
+                alert('Neplatny typ souboru. Povolene: JPG, PNG, WebP, GIF');
+                input.value = '';
+                return;
+            }
+
+            // Validate file size (5MB)
+            if (file.size > 5 * 1024 * 1024) {
+                alert('Soubor je prilis velky. Maximum je 5MB.');
+                input.value = '';
+                return;
+            }
+
+            const alt = prompt('Popis obrazku (volitelne):', file.name.replace(/\.[^/.]+$/, '')) || '';
+
+            // Show progress
+            document.getElementById('galleryUploadProgress').style.display = 'block';
+
+            try {
+                // Convert to base64
+                const base64Data = await fileToBase64(file);
+
+                const response = await fetch('/api/gallery/upload', {
+                    method: 'POST',
+                    headers: {
+                        'Authorization': `Bearer ${token}`,
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({
+                        base64Data: base64Data,
+                        fileName: file.name,
+                        mimeType: file.type,
+                        alt: alt
+                    })
+                });
+
+                const data = await response.json();
+
+                if (data.success) {
+                    loadGallery();
+                } else {
+                    alert('Chyba: ' + (data.message || 'Nepodarilo se nahrat obrazek'));
+                }
+            } catch (error) {
+                alert('Chyba pri nahravani: ' + error.message);
+            } finally {
+                document.getElementById('galleryUploadProgress').style.display = 'none';
+                input.value = '';
+            }
+        }
+
+        function fileToBase64(file) {
+            return new Promise((resolve, reject) => {
+                const reader = new FileReader();
+                reader.onload = () => {
+                    // Remove data URL prefix (data:image/jpeg;base64,)
+                    const base64 = reader.result.split(',')[1];
+                    resolve(base64);
+                };
+                reader.onerror = reject;
+                reader.readAsDataURL(file);
+            });
         }
 
         async function addGalleryImage(url, alt) {
