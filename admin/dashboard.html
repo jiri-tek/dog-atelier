@@ -1391,7 +1391,35 @@
         }
 
         function openUploadWidget() {
-            alert('Cloudinary upload bude nastaven v dalsim kroku');
+            const url = prompt('Zadejte URL obrazku:\n(napr. z Google Drive, Cloudinary, nebo jiny hosting)');
+            if (!url || !url.trim()) return;
+
+            const alt = prompt('Popis obrazku (volitelne):', '') || '';
+
+            addGalleryImage(url.trim(), alt.trim());
+        }
+
+        async function addGalleryImage(url, alt) {
+            try {
+                const response = await fetch('/api/gallery', {
+                    method: 'POST',
+                    headers: {
+                        'Authorization': `Bearer ${token}`,
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({ url, alt })
+                });
+
+                const data = await response.json();
+
+                if (data.success) {
+                    loadGallery();
+                } else {
+                    alert('Chyba: ' + (data.message || 'Nepodarilo se pridat obrazek'));
+                }
+            } catch (error) {
+                alert('Chyba pripojeni');
+            }
         }
 
         async function deleteImage(imageId) {

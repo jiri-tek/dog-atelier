@@ -1858,13 +1858,14 @@
     <!-- Gallery Section -->
     <section id="galerie" class="gallery">
         <h2>Galerie</h2>
-        <div class="gallery-grid">
-            <div class="gallery-item"><img src="https://images.unsplash.com/photo-1583511655857-d19b40a7a54e?w=500&q=80&fit=crop" alt="Detail srsti"></div>
-            <div class="gallery-item"><img src="https://images.unsplash.com/photo-1596492784531-6e6eb5ea9993?w=500&q=80&fit=crop" alt="Bílý pudl"></div>
-            <div class="gallery-item"><img src="https://images.unsplash.com/photo-1587300003388-59208cc962cb?w=500&q=80&fit=crop" alt="Spokojený pejsek"></div>
-            <div class="gallery-item"><img src="https://images.unsplash.com/photo-1518155317743-a8ff43ea6a5f?w=500&q=80&fit=crop" alt="Interiér salonu"></div>
-            <div class="gallery-item"><img src="https://images.unsplash.com/photo-1534361960057-19889db9621e?w=500&q=80&fit=crop" alt="Detail péče"></div>
-            <div class="gallery-item"><img src="https://images.unsplash.com/photo-1552053831-71594a27632d?w=500&q=80&fit=crop" alt="Mazlení s pejskem"></div>
+        <div id="galleryGrid" class="gallery-grid">
+            <!-- Fallback images shown while loading or if API fails -->
+            <div class="gallery-item"><img src="https://images.unsplash.com/photo-1583511655857-d19b40a7a54e?w=500&q=80&fit=crop" alt="Detail srsti" loading="lazy"></div>
+            <div class="gallery-item"><img src="https://images.unsplash.com/photo-1596492784531-6e6eb5ea9993?w=500&q=80&fit=crop" alt="Bily pudl" loading="lazy"></div>
+            <div class="gallery-item"><img src="https://images.unsplash.com/photo-1587300003388-59208cc962cb?w=500&q=80&fit=crop" alt="Spokojeny pejsek" loading="lazy"></div>
+            <div class="gallery-item"><img src="https://images.unsplash.com/photo-1518155317743-a8ff43ea6a5f?w=500&q=80&fit=crop" alt="Interior salonu" loading="lazy"></div>
+            <div class="gallery-item"><img src="https://images.unsplash.com/photo-1534361960057-19889db9621e?w=500&q=80&fit=crop" alt="Detail pece" loading="lazy"></div>
+            <div class="gallery-item"><img src="https://images.unsplash.com/photo-1552053831-71594a27632d?w=500&q=80&fit=crop" alt="Mazleni s pejskem" loading="lazy"></div>
         </div>
     </section>
 
@@ -2880,6 +2881,27 @@
             });
         });
     }
+
+    // Dynamic Gallery Loading
+    (function loadPublicGallery() {
+        const galleryGrid = document.getElementById('galleryGrid');
+        if (!galleryGrid) return;
+
+        fetch('/api/gallery/public')
+            .then(response => response.json())
+            .then(data => {
+                if (data.success && data.images && data.images.length > 0) {
+                    galleryGrid.innerHTML = data.images.map(img =>
+                        `<div class="gallery-item"><img src="${img.url}" alt="${img.alt || 'DogAtelier galerie'}" loading="lazy"></div>`
+                    ).join('');
+                }
+                // If no images from API, keep the fallback Unsplash images
+            })
+            .catch(err => {
+                // On error, keep fallback images - no action needed
+                console.log('Gallery API unavailable, using fallback images');
+            });
+    })();
     </script>
 
     <!-- Sticky Reservation Button -->

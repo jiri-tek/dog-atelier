@@ -2,6 +2,10 @@
   "version": 2,
   "routes": [
     {
+      "src": "/api/gallery$",
+      "dest": "/api/gallery/admin"
+    },
+    {
       "src": "/api/(.*)",
       "dest": "/api/$1"
     }
