@@ -762,6 +762,155 @@ function deleteGalleryImage(imageId) {
   return { success: false, message: 'Image not found' };
 }
 
+// ============ CALENDAR SYNC ============
+// Sync changes from Google Calendar back to the sheet
+function syncFromCalendar() {
+  const calendar = CalendarApp.getCalendarById(CONFIG.CALENDAR_ID);
+  if (!calendar) {
+    Logger.log('Calendar not found');
+    return { success: false, message: 'Kalendář nenalezen' };
+  }
+
+  const sheet = SpreadsheetApp.openById(CONFIG.SHEET_ID).getSheetByName(CONFIG.RESERVATIONS_SHEET);
+  if (!sheet) {
+    return { success: false, message: 'Sheet nenalezen' };
+  }
+
+  const data = sheet.getDataRange().getValues();
+  const headers = data[0];
+
+  const cols = {
+    eventId: headers.indexOf('Event ID'),
+    status: headers.indexOf('Status'),
+    date: headers.indexOf('Datum'),
+    time: headers.indexOf('Čas') !== -1 ? headers.indexOf('Čas') : headers.indexOf('Cas'),
+    service: headers.indexOf('Služba') !== -1 ? headers.indexOf('Služba') : headers.indexOf('Sluzba'),
+    firstName: headers.indexOf('Jméno') !== -1 ? headers.indexOf('Jméno') : headers.indexOf('Jmeno'),
+    lastName: headers.indexOf('Příjmení') !== -1 ? headers.indexOf('Příjmení') : headers.indexOf('Prijmeni')
+  };
+
+  if (cols.eventId === -1) {
+    return { success: false, message: 'Sloupec Event ID nenalezen' };
+  }
+
+  let updated = 0;
+  let deleted = 0;
+
+  for (let i = 1; i < data.length; i++) {
+    const row = data[i];
+    const eventId = row[cols.eventId];
+    const currentStatus = cols.status !== -1 ? row[cols.status] : '';
+
+    // Skip if no eventId or already cancelled
+    if (!eventId || currentStatus === 'cancelled') continue;
+
+    try {
+      const event = calendar.getEventById(eventId);
+
+      if (!event) {
+        // Event was deleted in calendar - mark as cancelled in sheet
+        if (cols.status !== -1) {
+          sheet.getRange(i + 1, cols.status + 1).setValue('cancelled-from-calendar');
+        }
+        deleted++;
+        continue;
+      }
+
+      // Event exists - check for updates
+      const eventStart = event.getStartTime();
+      const eventTitle = event.getTitle();
+
+      // Update date/time if changed
+      const newDate = Utilities.formatDate(eventStart, 'Europe/Prague', 'd.M.yyyy');
+      const newTime = Utilities.formatDate(eventStart, 'Europe/Prague', 'HH:mm');
+
+      let rowChanged = false;
+
+      // Check if date changed
+      const currentDate = row[cols.date];
+      let currentDateStr;
+      if (typeof currentDate.getFullYear === 'function') {
+        currentDateStr = Utilities.formatDate(currentDate, 'Europe/Prague', 'd.M.yyyy');
+      } else {
+        currentDateStr = currentDate.toString();
+      }
+
+      if (currentDateStr !== newDate && cols.date !== -1) {
+        sheet.getRange(i + 1, cols.date + 1).setValue(newDate);
+        rowChanged = true;
+      }
+
+      // Check if time changed
+      const currentTime = row[cols.time];
+      let currentTimeStr;
+      if (typeof currentTime.getHours === 'function') {
+        currentTimeStr = Utilities.formatDate(currentTime, 'Europe/Prague', 'HH:mm');
+      } else {
+        currentTimeStr = currentTime.toString();
+      }
+
+      if (currentTimeStr !== newTime && cols.time !== -1) {
+        sheet.getRange(i + 1, cols.time + 1).setValue(newTime);
+        rowChanged = true;
+      }
+
+      // Check if title (service) changed
+      const titleParts = eventTitle.split(' - ');
+      if (titleParts.length > 0) {
+        const newService = titleParts[0].trim();
+        const currentService = row[cols.service] || '';
+        if (currentService !== newService && cols.service !== -1) {
+          sheet.getRange(i + 1, cols.service + 1).setValue(newService);
+          rowChanged = true;
+        }
+      }
+
+      if (rowChanged) updated++;
+
+    } catch (e) {
+      // Event might be deleted or inaccessible
+      Logger.log('Error syncing event ' + eventId + ': ' + e.toString());
+    }
+  }
+
+  Logger.log(`Calendar sync complete: ${updated} updated, ${deleted} deleted`);
+  return { success: true, message: `Synchronizováno: ${updated} aktualizováno, ${deleted} smazáno` };
+}
+
+// Setup automatic calendar sync trigger (runs every 15 minutes)
+function setupCalendarSync() {
+  // Remove existing triggers
+  const triggers = ScriptApp.getProjectTriggers();
+  triggers.forEach(trigger => {
+    if (trigger.getHandlerFunction() === 'syncFromCalendar') {
+      ScriptApp.deleteTrigger(trigger);
+    }
+  });
+
+  // Create new time-based trigger
+  ScriptApp.newTrigger('syncFromCalendar')
+    .timeBased()
+    .everyMinutes(15)
+    .create();
+
+  Logger.log('Calendar sync trigger created (every 15 minutes)');
+  return { success: true, message: 'Synchronizace nastavena (každých 15 minut)' };
+}
+
+// Remove calendar sync trigger
+function removeCalendarSync() {
+  const triggers = ScriptApp.getProjectTriggers();
+  let removed = 0;
+  triggers.forEach(trigger => {
+    if (trigger.getHandlerFunction() === 'syncFromCalendar') {
+      ScriptApp.deleteTrigger(trigger);
+      removed++;
+    }
+  });
+  Logger.log(`Removed ${removed} calendar sync triggers`);
+  return { success: true, message: `Odstraněno ${removed} triggerů` };
+}
+
 // ============ SETUP ============
 function initialSetup() {
   const scriptProperties = PropertiesService.getScriptProperties();
@@ -773,5 +922,6 @@ function initialSetup() {
     Logger.log('ADMIN_API_KEY already set: ' + scriptProperties.getProperty('ADMIN_API_KEY'));
   }
   setupGallerySheet();
+  setupCalendarSync(); // Auto-setup calendar sync
   Logger.log('Setup complete!');
 }
