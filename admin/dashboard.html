@@ -241,6 +241,69 @@
             color: white;
         }
 
+        .calendar-day.selected-multi {
+            background: var(--color-primary);
+            color: white;
+            box-shadow: inset 0 0 0 2px rgba(255,255,255,0.5);
+        }
+
+        .calendar-day.selected-multi:hover {
+            background: var(--color-primary);
+            opacity: 0.9;
+        }
+
+        .bulk-actions {
+            background: var(--color-surface);
+            border-radius: 8px;
+            padding: 1rem;
+            margin-top: 1rem;
+            display: none;
+        }
+
+        .bulk-actions.show {
+            display: block;
+        }
+
+        .bulk-actions-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 0.75rem;
+        }
+
+        .bulk-actions-header strong {
+            font-size: 0.9rem;
+        }
+
+        .bulk-actions-buttons {
+            display: flex;
+            gap: 0.5rem;
+            flex-wrap: wrap;
+        }
+
+        .btn-small {
+            padding: 0.4rem 0.8rem;
+            font-size: 0.8rem;
+        }
+
+        .btn-danger {
+            background: #dc3545;
+            color: white;
+        }
+
+        .btn-danger:hover {
+            background: #c82333;
+        }
+
+        .btn-success {
+            background: var(--color-success);
+            color: white;
+        }
+
+        .btn-success:hover {
+            opacity: 0.9;
+        }
+
         .calendar-day.has-reservation::after {
             content: '';
             position: absolute;
@@ -689,14 +752,32 @@
                         </div>
                     </div>
                     <div class="calendar-grid" id="closedCalendarGrid"></div>
+
+                    <!-- Bulk actions panel -->
+                    <div class="bulk-actions" id="bulkActionsPanel">
+                        <div class="bulk-actions-header">
+                            <strong>Vybrano: <span id="selectedCount">0</span> dni</strong>
+                            <button class="btn btn-small btn-secondary" onclick="clearSelection()">Zrusit vyber</button>
+                        </div>
+                        <div class="bulk-actions-buttons">
+                            <button class="btn btn-small btn-danger" onclick="bulkCloseFullDay()">Zavrit vse</button>
+                            <button class="btn btn-small btn-success" onclick="bulkOpenAll()">Otevrit vse</button>
+                            <button class="btn btn-small btn-secondary" onclick="showBulkHoursModal()">Nastavit hodiny...</button>
+                        </div>
+                    </div>
+
                     <div style="margin-top: 1rem; font-size: 0.8rem; color: var(--color-text-light);">
                         <div style="display: flex; align-items: center; gap: 0.5rem; margin-bottom: 0.3rem;">
                             <span style="width: 12px; height: 12px; background: #FFCCCC; border-radius: 2px;"></span>
                             <span>Zavreno cely den</span>
                         </div>
-                        <div style="display: flex; align-items: center; gap: 0.5rem;">
+                        <div style="display: flex; align-items: center; gap: 0.5rem; margin-bottom: 0.3rem;">
                             <span style="width: 12px; height: 12px; background: #FFE0B2; border-radius: 2px;"></span>
                             <span>Castecne zavreno</span>
+                        </div>
+                        <div style="display: flex; align-items: center; gap: 0.5rem;">
+                            <span style="width: 12px; height: 12px; background: var(--color-primary); border-radius: 2px;"></span>
+                            <span>Vybrano (klikni pro oznaceni vice dni)</span>
                         </div>
                     </div>
                 </div>
@@ -1344,6 +1425,7 @@
         let monthDaysData = [];
         let availableTimeSlots = [];
         let selectedClosedDate = null;
+        let selectedDates = new Set(); // For multi-select
 
         async function loadClosedDays() {
             const listContainer = document.getElementById('closedDaysList');
@@ -1442,8 +1524,13 @@
 
                 const dateStr = `${day}.${month + 1}.${year}`;
 
+                // Check if this date is in multi-select
+                if (selectedDates.has(dateStr)) {
+                    classes += ' selected-multi';
+                }
+
                 if (!isWeekend) {
-                    html += `<div class="${classes}" style="${style}" onclick="selectClosedDay('${dateStr}')">${day}</div>`;
+                    html += `<div class="${classes}" style="${style}" onclick="toggleDaySelection('${dateStr}', event)">${day}</div>`;
                 } else {
                     html += `<div class="${classes}">${day}</div>`;
                 }
@@ -1462,6 +1549,151 @@
         function changeClosedMonth(delta) {
             closedMonth.setMonth(closedMonth.getMonth() + delta);
             loadMonthDays();
+        }
+
+        function toggleDaySelection(dateStr, event) {
+            if (selectedDates.has(dateStr)) {
+                selectedDates.delete(dateStr);
+            } else {
+                selectedDates.add(dateStr);
+            }
+
+            updateBulkActionsPanel();
+            renderClosedCalendar();
+
+            // If only one day selected, also show editor for it
+            if (selectedDates.size === 1) {
+                selectClosedDay(dateStr);
+            } else if (selectedDates.size === 0) {
+                document.getElementById('closedDayTitle').textContent = 'Vyberte den v kalendari';
+                document.getElementById('closedDayEditor').innerHTML = '<p style="color: var(--color-text-light);">Kliknete na den v kalendari pro upravu oteviraci doby.</p>';
+            } else {
+                document.getElementById('closedDayTitle').textContent = `Vybrano ${selectedDates.size} dni`;
+                document.getElementById('closedDayEditor').innerHTML = '<p style="color: var(--color-text-light);">Pro hromadnou upravu pouzijte tlacitka pod kalendarem.</p>';
+            }
+        }
+
+        function updateBulkActionsPanel() {
+            const panel = document.getElementById('bulkActionsPanel');
+            const countSpan = document.getElementById('selectedCount');
+
+            if (selectedDates.size > 0) {
+                panel.classList.add('show');
+                countSpan.textContent = selectedDates.size;
+            } else {
+                panel.classList.remove('show');
+            }
+        }
+
+        function clearSelection() {
+            selectedDates.clear();
+            updateBulkActionsPanel();
+            renderClosedCalendar();
+            document.getElementById('closedDayTitle').textContent = 'Vyberte den v kalendari';
+            document.getElementById('closedDayEditor').innerHTML = '<p style="color: var(--color-text-light);">Kliknete na den v kalendari pro upravu oteviraci doby.</p>';
+        }
+
+        async function bulkCloseFullDay() {
+            if (selectedDates.size === 0) return;
+
+            const days = Array.from(selectedDates).map(date => ({
+                date: date,
+                isFullDay: true,
+                closedHours: []
+            }));
+
+            await saveBulkDays(days, 'Dny zavreny');
+        }
+
+        async function bulkOpenAll() {
+            if (selectedDates.size === 0) return;
+
+            const days = Array.from(selectedDates).map(date => ({
+                date: date,
+                isFullDay: false,
+                closedHours: []
+            }));
+
+            await saveBulkDays(days, 'Dny otevreny');
+        }
+
+        function showBulkHoursModal() {
+            if (selectedDates.size === 0) return;
+
+            let html = `
+                <div style="padding: 1rem;">
+                    <h3 style="margin-bottom: 1rem;">Nastavit hodiny pro ${selectedDates.size} dni</h3>
+                    <p style="font-size: 0.9rem; margin-bottom: 1rem; color: var(--color-text-light);">Vyberte hodiny, ktere chcete zavrit:</p>
+                    <div style="display: grid; grid-template-columns: repeat(auto-fill, minmax(80px, 1fr)); gap: 0.5rem; margin-bottom: 1rem;">
+            `;
+
+            availableTimeSlots.forEach(slot => {
+                const hour = parseInt(slot.split(':')[0]);
+                html += `
+                    <label style="display: flex; align-items: center; gap: 0.3rem; padding: 0.5rem; background: var(--color-bg); border-radius: 6px; cursor: pointer;">
+                        <input type="checkbox" class="bulkHourCheck" data-hour="${hour}">
+                        ${slot}
+                    </label>
+                `;
+            });
+
+            html += `
+                    </div>
+                    <div style="display: flex; gap: 0.5rem;">
+                        <button class="btn btn-primary" onclick="applyBulkHours()">Aplikovat</button>
+                        <button class="btn btn-secondary" onclick="closeBulkHoursModal()">Zrusit</button>
+                    </div>
+                </div>
+            `;
+
+            document.getElementById('closedDayEditor').innerHTML = html;
+            document.getElementById('closedDayTitle').textContent = `Hromadne nastaveni hodin`;
+        }
+
+        function closeBulkHoursModal() {
+            document.getElementById('closedDayTitle').textContent = `Vybrano ${selectedDates.size} dni`;
+            document.getElementById('closedDayEditor').innerHTML = '<p style="color: var(--color-text-light);">Pro hromadnou upravu pouzijte tlacitka pod kalendarem.</p>';
+        }
+
+        async function applyBulkHours() {
+            const closedHours = [];
+            document.querySelectorAll('.bulkHourCheck:checked').forEach(cb => {
+                closedHours.push(parseInt(cb.dataset.hour));
+            });
+
+            const days = Array.from(selectedDates).map(date => ({
+                date: date,
+                isFullDay: false,
+                closedHours: closedHours
+            }));
+
+            await saveBulkDays(days, 'Hodiny nastaveny');
+        }
+
+        async function saveBulkDays(days, successMessage) {
+            try {
+                const response = await fetch('/api/closed-days/bulk', {
+                    method: 'POST',
+                    headers: {
+                        'Authorization': `Bearer ${token}`,
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({ days: days })
+                });
+
+                const data = await response.json();
+
+                if (data.success) {
+                    clearSelection();
+                    loadMonthDays();
+                    loadClosedDays();
+                    alert(successMessage + '!');
+                } else {
+                    alert('Chyba: ' + data.message);
+                }
+            } catch (error) {
+                alert('Chyba pripojeni');
+            }
         }
 
         function selectClosedDay(dateStr) {
