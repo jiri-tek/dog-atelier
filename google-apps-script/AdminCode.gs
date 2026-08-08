@@ -892,9 +892,9 @@ function uploadGalleryImage(base64Data, fileName, mimeType, alt) {
     // Make file publicly accessible
     file.setSharing(DriveApp.Access.ANYONE_WITH_LINK, DriveApp.Permission.VIEW);
 
-    // Get direct image URL (convert Drive URL to direct link)
+    // Get direct image URL - use lh3.googleusercontent.com format which works better for embedding
     const fileId = file.getId();
-    const directUrl = `https://drive.google.com/uc?export=view&id=${fileId}`;
+    const directUrl = `https://lh3.googleusercontent.com/d/${fileId}`;
 
     // Add to gallery sheet
     let sheet = SpreadsheetApp.openById(CONFIG.SHEET_ID).getSheetByName(CONFIG.GALLERY_SHEET);
