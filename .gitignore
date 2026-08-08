@@ -6,6 +6,8 @@
 
 # Large source files (not needed for deployment)
 *.svg
+!favicon.svg
+!logo.svg
 LOGO*.png
 VISUAL.png
 logo-*.png
