@@ -121,7 +121,7 @@
         }
 
         .nav-logo img {
-            height: 80px;
+            height: 60px;
             width: auto;
             display: block;
             transition: height 0.3s ease;
@@ -133,7 +133,7 @@
         }
 
         nav.scrolled .nav-logo img {
-            height: 55px;
+            height: 45px;
         }
 
         .nav-links {
@@ -647,6 +647,17 @@
         .footer-content {
             max-width: 1200px;
             margin: 0 auto;
+        }
+
+        .footer-logo {
+            margin-bottom: 1rem;
+        }
+
+        .footer-logo img {
+            height: 40px;
+            width: auto;
+            filter: brightness(0) invert(1);
+            opacity: 0.9;
         }
 
         .footer-links {
@@ -1897,6 +1908,9 @@
     <!-- Footer -->
     <footer>
         <div class="footer-content">
+            <div class="footer-logo">
+                <img src="logo.svg" alt="DogAtelier">
+            </div>
             <p>© 2025 DogAtelier. Všechna práva vyhrazena.</p>
             <div class="footer-links">
                 <a href="#" onclick="openLegalModal('privacy'); return false;">Ochrana osobních údajů</a>
