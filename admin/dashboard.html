@@ -928,6 +928,7 @@
     <script>
         // Configuration
         const ADMIN_API_URL = '/api/reservations';
+        const CACHE_TTL = 60000; // 1 minute cache
         let currentCancelId = null;
         let allReservations = [];
         let currentMonth = new Date();
@@ -938,13 +939,46 @@
                         'Cervenec', 'Srpen', 'Zari', 'Rijen', 'Listopad', 'Prosinec'];
         const DAYS = ['Po', 'Ut', 'St', 'Ct', 'Pa', 'So', 'Ne'];
 
+        // ============ LOCAL CACHE SYSTEM ============
+        const cache = {
+            get(key) {
+                try {
+                    const item = localStorage.getItem('adminCache_' + key);
+                    if (!item) return null;
+                    const { data, timestamp } = JSON.parse(item);
+                    if (Date.now() - timestamp > CACHE_TTL) {
+                        localStorage.removeItem('adminCache_' + key);
+                        return null;
+                    }
+                    return data;
+                } catch (e) { return null; }
+            },
+            set(key, data) {
+                try {
+                    localStorage.setItem('adminCache_' + key, JSON.stringify({
+                        data,
+                        timestamp: Date.now()
+                    }));
+                } catch (e) {}
+            },
+            clear(key) {
+                if (key) {
+                    localStorage.removeItem('adminCache_' + key);
+                } else {
+                    Object.keys(localStorage).forEach(k => {
+                        if (k.startsWith('adminCache_')) localStorage.removeItem(k);
+                    });
+                }
+            }
+        };
+
         // Auth check
         const token = localStorage.getItem('adminToken');
         if (!token) {
             window.location.href = '/admin/';
         }
 
-        // Verify token on load
+        // Verify token - but don't block page load
         fetch('/api/auth', {
             headers: { 'Authorization': `Bearer ${token}` }
         })
@@ -952,12 +986,12 @@
         .then(data => {
             if (!data.valid) {
                 localStorage.removeItem('adminToken');
+                cache.clear();
                 window.location.href = '/admin/';
             }
         })
         .catch(() => {
-            localStorage.removeItem('adminToken');
-            window.location.href = '/admin/';
+            // Only redirect on definite auth failure, not network issues
         });
 
         // Tab switching
@@ -1109,9 +1143,22 @@
             container.style.display = 'block';
         }
 
-        // Load reservations
-        async function loadReservations() {
+        // Load reservations with cache
+        async function loadReservations(forceRefresh = false) {
             const container = document.getElementById('reservationsTable');
+
+            // Show cached data immediately if available
+            const cachedData = !forceRefresh && cache.get('reservations');
+            if (cachedData && cachedData.reservations) {
+                allReservations = cachedData.reservations;
+                renderReservations(cachedData.reservations);
+                updateStats(cachedData.reservations);
+                renderCalendar();
+                // Still fetch fresh data in background
+                fetchReservationsInBackground();
+                return;
+            }
+
             container.innerHTML = '<div class="loading"><div class="spinner"></div><p>Nacitam rezervace...</p></div>';
 
             try {
@@ -1125,6 +1172,7 @@
 
                 if (data.success && data.reservations) {
                     allReservations = data.reservations;
+                    cache.set('reservations', data);
                     renderReservations(data.reservations);
                     updateStats(data.reservations);
                     renderCalendar();
@@ -1134,10 +1182,32 @@
             } catch (error) {
                 container.innerHTML = `
                     <div class="empty-state">
-                        <p>Chyba pri nacitani. <a href="#" onclick="loadReservations(); return false;">Zkusit znovu</a></p>
+                        <p>Chyba pri nacitani. <a href="#" onclick="loadReservations(true); return false;">Zkusit znovu</a></p>
                     </div>
                 `;
             }
+        }
+
+        // Background fetch for reservations
+        async function fetchReservationsInBackground() {
+            try {
+                const response = await fetch('/api/reservations', {
+                    headers: { 'Authorization': `Bearer ${token}` }
+                });
+                if (!response.ok) return;
+                const data = await response.json();
+                if (data.success && data.reservations) {
+                    // Only update if data changed
+                    const oldCount = allReservations.length;
+                    allReservations = data.reservations;
+                    cache.set('reservations', data);
+                    if (data.reservations.length !== oldCount) {
+                        renderReservations(data.reservations);
+                        updateStats(data.reservations);
+                        renderCalendar();
+                    }
+                }
+            } catch (e) {}
         }
 
         function renderReservations(reservations) {
@@ -1251,8 +1321,9 @@
                 const data = await response.json();
 
                 if (data.success) {
+                    cache.clear('reservations');
                     closeCancelModal();
-                    loadReservations();
+                    loadReservations(true);
                 } else {
                     alert('Chyba: ' + (data.message || 'Nepodarilo se zrusit rezervaci'));
                 }
@@ -1333,8 +1404,9 @@
                 const data = await response.json();
 
                 if (data.success) {
+                    cache.clear('reservations');
                     closeReservationModal();
-                    loadReservations();
+                    loadReservations(true);
                 } else {
                     alert('Chyba: ' + (data.message || 'Nepodarilo se ulozit rezervaci'));
                 }
@@ -1343,9 +1415,21 @@
             }
         }
 
-        // Gallery
-        async function loadGallery() {
+        // Gallery with cache
+        async function loadGallery(forceRefresh = false) {
             const container = document.getElementById('galleryGrid');
+
+            // Show cached data immediately
+            const cachedData = !forceRefresh && cache.get('gallery');
+            if (cachedData && cachedData.images) {
+                if (cachedData.images.length > 0) {
+                    renderGallery(cachedData.images);
+                }
+                // Fetch fresh in background
+                fetchGalleryInBackground();
+                return;
+            }
+
             container.innerHTML = '<div class="loading"><div class="spinner"></div><p>Nacitam galerii...</p></div>';
 
             try {
@@ -1358,6 +1442,7 @@
                 const data = await response.json();
 
                 if (data.success && data.images && data.images.length > 0) {
+                    cache.set('gallery', data);
                     renderGallery(data.images);
                 } else {
                     container.innerHTML = `
@@ -1376,6 +1461,19 @@
                     </div>
                 `;
             }
+        }
+
+        async function fetchGalleryInBackground() {
+            try {
+                const response = await fetch('/api/gallery', {
+                    headers: { 'Authorization': `Bearer ${token}` }
+                });
+                if (!response.ok) return;
+                const data = await response.json();
+                if (data.success) {
+                    cache.set('gallery', data);
+                }
+            } catch (e) {}
         }
 
         function renderGallery(images) {
@@ -1455,7 +1553,8 @@
                 const data = await response.json();
 
                 if (data.success) {
-                    loadGallery();
+                    cache.clear('gallery');
+                    loadGallery(true);
                 } else {
                     alert('Chyba: ' + (data.message || 'Nepodarilo se nahrat obrazek'));
                 }
@@ -1494,7 +1593,8 @@
                 const data = await response.json();
 
                 if (data.success) {
-                    loadGallery();
+                    cache.clear('gallery');
+                    loadGallery(true);
                 } else {
                     alert('Chyba: ' + (data.message || 'Nepodarilo se pridat obrazek'));
                 }
@@ -1519,7 +1619,8 @@
                 const data = await response.json();
 
                 if (data.success) {
-                    loadGallery();
+                    cache.clear('gallery');
+                    loadGallery(true);
                 } else {
                     alert('Chyba: ' + (data.message || 'Nepodarilo se smazat'));
                 }
@@ -1536,8 +1637,20 @@
         let selectedClosedDate = null;
         let selectedDates = new Set(); // For multi-select
 
-        async function loadClosedDays() {
+        async function loadClosedDays(forceRefresh = false) {
             const listContainer = document.getElementById('closedDaysList');
+
+            // Show cached data immediately
+            const cachedData = !forceRefresh && cache.get('closedDays');
+            if (cachedData) {
+                closedDaysData = cachedData.closedDays || [];
+                availableTimeSlots = cachedData.timeSlots || [];
+                renderClosedDaysList();
+                // Fetch fresh in background
+                fetchClosedDaysInBackground();
+                return;
+            }
+
             listContainer.innerHTML = '<div class="loading"><div class="spinner"></div><p>Nacitam...</p></div>';
 
             try {
@@ -1550,6 +1663,7 @@
                 if (data.success) {
                     closedDaysData = data.closedDays || [];
                     availableTimeSlots = data.timeSlots || [];
+                    cache.set('closedDays', data);
                     renderClosedDaysList();
                 } else {
                     listContainer.innerHTML = '<div class="empty-state"><p>Chyba: ' + data.message + '</p></div>';
@@ -1559,8 +1673,32 @@
             }
         }
 
-        async function loadMonthDays() {
+        async function fetchClosedDaysInBackground() {
+            try {
+                const response = await fetch('/api/closed-days', {
+                    headers: { 'Authorization': `Bearer ${token}` }
+                });
+                const data = await response.json();
+                if (data.success) {
+                    cache.set('closedDays', data);
+                }
+            } catch (e) {}
+        }
+
+        async function loadMonthDays(forceRefresh = false) {
             const yearMonth = `${closedMonth.getFullYear()}-${String(closedMonth.getMonth() + 1).padStart(2, '0')}`;
+
+            // Show cached data immediately
+            const cacheKey = 'monthDays_' + yearMonth;
+            const cachedData = !forceRefresh && cache.get(cacheKey);
+            if (cachedData) {
+                monthDaysData = cachedData.days || [];
+                availableTimeSlots = cachedData.timeSlots || [];
+                renderClosedCalendar();
+                // Fetch fresh in background
+                fetchMonthDaysInBackground(yearMonth);
+                return;
+            }
 
             try {
                 const response = await fetch(`/api/closed-days?month=${yearMonth}`, {
@@ -1572,11 +1710,24 @@
                 if (data.success) {
                     monthDaysData = data.days || [];
                     availableTimeSlots = data.timeSlots || [];
+                    cache.set(cacheKey, data);
                     renderClosedCalendar();
                 }
             } catch (error) {
                 console.error('Error loading month days:', error);
             }
+        }
+
+        async function fetchMonthDaysInBackground(yearMonth) {
+            try {
+                const response = await fetch(`/api/closed-days?month=${yearMonth}`, {
+                    headers: { 'Authorization': `Bearer ${token}` }
+                });
+                const data = await response.json();
+                if (data.success) {
+                    cache.set('monthDays_' + yearMonth, data);
+                }
+            } catch (e) {}
         }
 
         function renderClosedCalendar() {
@@ -1793,6 +1944,11 @@
                 const data = await response.json();
 
                 if (data.success) {
+                    // Invalidate cache
+                    cache.clear('closedDays');
+                    Object.keys(localStorage).forEach(k => {
+                        if (k.startsWith('adminCache_monthDays_')) localStorage.removeItem(k);
+                    });
                     // Update local data without full reload
                     const updatedDates = days.map(d => d.date);
                     days.forEach(day => {
@@ -1807,7 +1963,7 @@
                     clearSelection();
                     renderClosedCalendar();
                     // Reload closed days list in background
-                    loadClosedDays();
+                    loadClosedDays(true);
                     alert(successMessage + '!');
                 } else {
                     alert('Chyba: ' + data.message);
@@ -1905,6 +2061,11 @@
                 const data = await response.json();
 
                 if (data.success) {
+                    // Invalidate cache
+                    cache.clear('closedDays');
+                    Object.keys(localStorage).forEach(k => {
+                        if (k.startsWith('adminCache_monthDays_')) localStorage.removeItem(k);
+                    });
                     // Update local data without full reload
                     const parts = selectedClosedDate.split('.');
                     const dayNum = parseInt(parts[0]);
@@ -1914,7 +2075,7 @@
                         existing.closedHours = closedHours;
                     }
                     renderClosedCalendar();
-                    loadClosedDays(); // Background update for list
+                    loadClosedDays(true); // Background update for list
                     alert('Ulozeno!');
                 } else {
                     alert('Chyba: ' + data.message);
@@ -1944,6 +2105,11 @@
                 const data = await response.json();
 
                 if (data.success) {
+                    // Invalidate cache
+                    cache.clear('closedDays');
+                    Object.keys(localStorage).forEach(k => {
+                        if (k.startsWith('adminCache_monthDays_')) localStorage.removeItem(k);
+                    });
                     // Update local data without full reload
                     const parts = selectedClosedDate.split('.');
                     const dayNum = parseInt(parts[0]);
@@ -1954,7 +2120,7 @@
                     }
                     renderClosedCalendar();
                     selectClosedDay(selectedClosedDate);
-                    loadClosedDays(); // Background update
+                    loadClosedDays(true); // Background update
                     alert('Otevreno!');
                 } else {
                     alert('Chyba: ' + data.message);
@@ -2005,15 +2171,45 @@
             window.location.href = '/admin/';
         }
 
-        // Initial load
+        // Initial load - use cache for instant display
         loadReservations();
 
-        // Prefetch other tab data in background for faster tab switching
-        setTimeout(() => {
-            // Silently preload gallery and opening hours data
-            fetch('/api/gallery', { headers: { 'Authorization': `Bearer ${token}` } }).catch(() => {});
-            fetch('/api/closed-days', { headers: { 'Authorization': `Bearer ${token}` } }).catch(() => {});
-        }, 2000); // Wait 2s after page load to avoid blocking
+        // Prefetch ALL data via combined endpoint for faster tab switching
+        async function prefetchAllData() {
+            try {
+                const yearMonth = `${new Date().getFullYear()}-${String(new Date().getMonth() + 1).padStart(2, '0')}`;
+                const response = await fetch(`/api/admin-data?include=reservations,closedDays,gallery&month=${yearMonth}`, {
+                    headers: { 'Authorization': `Bearer ${token}` }
+                });
+                const data = await response.json();
+
+                if (data.success) {
+                    // Cache all data for instant tab switching
+                    if (data.gallery && data.gallery.success) {
+                        cache.set('gallery', data.gallery);
+                    }
+                    if (data.closedDays && data.closedDays.success) {
+                        cache.set('closedDays', data.closedDays);
+                    }
+                    if (data.monthDays && data.monthDays.success) {
+                        cache.set('monthDays_' + yearMonth, data.monthDays);
+                    }
+                }
+            } catch (e) {
+                // Fallback to individual fetches
+                fetch('/api/gallery', { headers: { 'Authorization': `Bearer ${token}` } })
+                    .then(r => r.json())
+                    .then(data => { if (data.success) cache.set('gallery', data); })
+                    .catch(() => {});
+                fetch('/api/closed-days', { headers: { 'Authorization': `Bearer ${token}` } })
+                    .then(r => r.json())
+                    .then(data => { if (data.success) cache.set('closedDays', data); })
+                    .catch(() => {});
+            }
+        }
+
+        // Start prefetch after reservations load
+        setTimeout(prefetchAllData, 500);
 
         // Auto-refresh reservations every 30 seconds
         let autoRefreshInterval = null;
@@ -2023,8 +2219,8 @@
             if (autoRefreshInterval) return;
             autoRefreshInterval = setInterval(() => {
                 // Only refresh if tab is visible and not editing
-                if (!document.hidden && !document.querySelector('.modal-overlay[style*="flex"]')) {
-                    loadReservations();
+                if (!document.hidden && !document.querySelector('.modal-overlay.active')) {
+                    loadReservations(true); // Force refresh, bypass cache
                     lastRefreshTime = Date.now();
                 }
             }, 30000); // 30 seconds
@@ -2047,7 +2243,7 @@
             } else {
                 // Refresh immediately if more than 30s passed
                 if (Date.now() - lastRefreshTime > 30000) {
-                    loadReservations();
+                    loadReservations(true);
                     lastRefreshTime = Date.now();
                 }
                 startAutoRefresh();
