@@ -1,0 +1,7 @@
+User-agent: *
+Allow: /
+
+# Admin panel - not indexed
+Disallow: /admin/
+
+Sitemap: https://www.dogatelier.cz/sitemap.xml
