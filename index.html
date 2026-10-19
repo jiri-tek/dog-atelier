@@ -2002,7 +2002,7 @@
                     <span class="pricing-price">200 Kč</span>
                 </div>
                 <div class="pricing-row">
-                    <span class="pricing-service">Ozonová terapie <em style="color: #7A8D80; font-weight: 400;">(připravujeme)</em></span>
+                    <span class="pricing-service">Ozonová terapie</span>
                     <span class="pricing-price">od 300 Kč</span>
                 </div>
                 <div class="pricing-row">
@@ -2022,8 +2022,7 @@
         <div class="ozone-inner">
             <h2>Ozon Spa</h2>
             <p class="subtitle">Regenerační péče pro zdravou pokožku a krásnou srst</p>
-            <p style="background: #f5f1e8; padding: 1rem; border-radius: 4px; color: #7A8D80; font-weight: 600; margin-bottom: 2rem;">🔜 Službu právě připravujeme – brzy bude k dispozici!</p>
-
+            
             <div class="ozone-content">
                 <p>
                     Dopřejte svému pejskovi nadstandardní péči, která podpoří zdraví jeho pokožky i přirozenou krásu srsti.
@@ -3179,6 +3178,7 @@
 
         currentSlide = 0;
         updateCarousel();
+        clearInterval(autoSlideInterval);
         startAutoSlide();
     }
 
@@ -3221,9 +3221,13 @@
         startAutoSlide();
     }
 
-    // Recalculate on resize
+    // Recalculate on resize with debounce
+    let resizeTimeout;
     window.addEventListener('resize', () => {
-        renderCarousel();
+        clearTimeout(resizeTimeout);
+        resizeTimeout = setTimeout(() => {
+            renderCarousel();
+        }, 150);
     });
 
     // Lightbox functions
