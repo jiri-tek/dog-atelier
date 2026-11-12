@@ -8,7 +8,7 @@
         window.dataLayer = window.dataLayer || [];
         function gtag(){dataLayer.push(arguments);}
 
-        // Default consent state - denied for all except functionality and security
+        // Default consent for EEA countries - strict opt-in (GDPR compliant)
         gtag('consent', 'default', {
             'ad_storage': 'denied',
             'ad_user_data': 'denied',
@@ -17,10 +17,24 @@
             'personalization_storage': 'denied',
             'functionality_storage': 'granted',
             'security_storage': 'granted',
-            'wait_for_update': 500
+            'ads_data_redaction': true,
+            'url_passthrough': true,
+            'wait_for_update': 500,
+            'region': ['AT', 'BE', 'BG', 'HR', 'CY', 'CZ', 'DK', 'EE', 'FI', 'FR', 'DE', 'GR', 'HU', 'IE', 'IT', 'LV', 'LT', 'LU', 'MT', 'NL', 'PL', 'PT', 'RO', 'SK', 'SI', 'ES', 'SE', 'IS', 'LI', 'NO', 'GB', 'CH']
         });
 
-        // If user has saved preferences, apply them as update
+        // Default consent for rest of world - granted (no GDPR requirement)
+        gtag('consent', 'default', {
+            'ad_storage': 'granted',
+            'ad_user_data': 'granted',
+            'ad_personalization': 'granted',
+            'analytics_storage': 'granted',
+            'personalization_storage': 'granted',
+            'functionality_storage': 'granted',
+            'security_storage': 'granted'
+        });
+
+        // If user has saved preferences, apply them as update (overrides region defaults)
         const savedConsent = localStorage.getItem('dogatelier_consent_v2');
         if (savedConsent) {
             gtag('consent', 'update', JSON.parse(savedConsent));
@@ -36,8 +50,8 @@
     <!-- End Google Tag Manager -->
 
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>DogAtelier – Profesionální grooming salon Ostrava</title>
-    <meta name="description" content="Profesionální grooming pro psy v Ostravě-Hrabůvce. Individuální péče, klidné prostředí, online objednání. Malá a střední plemena. Ozonová terapie.">
+    <title>Psí kadeřník Ostrava | Stříhání a trimování psů | DogAtelier</title>
+    <meta name="description" content="Psí kadeřník a salon v Ostravě-Hrabůvce. Profesionální stříhání, trimování a koupání psů. Individuální péče v klidném prostředí. Online rezervace. Ozonová terapie pro psy.">
 
     <!-- Canonical URL -->
     <link rel="canonical" href="https://www.dogatelier.cz/">
@@ -45,8 +59,8 @@
     <!-- Open Graph / Facebook -->
     <meta property="og:type" content="website">
     <meta property="og:url" content="https://www.dogatelier.cz/">
-    <meta property="og:title" content="DogAtelier – Profesionální grooming salon Ostrava">
-    <meta property="og:description" content="Profesionální grooming salon v Ostravě-Hrabůvce. Individuální péče o srst vašeho pejska v klidném prostředí. Online objednání.">
+    <meta property="og:title" content="Psí kadeřník Ostrava | Stříhání a trimování psů | DogAtelier">
+    <meta property="og:description" content="Psí kadeřník a salon v Ostravě-Hrabůvce. Profesionální stříhání, trimování a koupání psů. Individuální péče v klidném prostředí. Online rezervace.">
     <meta property="og:image" content="https://www.dogatelier.cz/og-image.jpg">
     <meta property="og:image:width" content="1200">
     <meta property="og:image:height" content="630">
@@ -56,8 +70,8 @@
     <!-- Twitter Card -->
     <meta name="twitter:card" content="summary_large_image">
     <meta name="twitter:url" content="https://www.dogatelier.cz/">
-    <meta name="twitter:title" content="DogAtelier – Profesionální grooming salon Ostrava">
-    <meta name="twitter:description" content="Profesionální grooming salon v Ostravě-Hrabůvce. Individuální péče o srst vašeho pejska v klidném prostředí.">
+    <meta name="twitter:title" content="Psí kadeřník Ostrava | Stříhání a trimování psů | DogAtelier">
+    <meta name="twitter:description" content="Psí kadeřník v Ostravě-Hrabůvce. Profesionální stříhání, trimování a koupání psů. Online rezervace.">
     <meta name="twitter:image" content="https://www.dogatelier.cz/og-image.jpg">
 
     <!-- Favicon -->
@@ -1812,11 +1826,11 @@
     <script type="application/ld+json">
     {
         "@context": "https://schema.org",
-        "@type": "LocalBusiness",
+        "@type": ["LocalBusiness", "PetGrooming"],
         "@id": "https://www.dogatelier.cz/#organization",
         "name": "DogAtelier",
         "legalName": "EPEUS Concept s.r.o.",
-        "description": "Profesionální grooming salon pro psy v Ostravě-Hrabůvce. Individuální péče o srst vašeho pejska v klidném prostředí.",
+        "description": "Profesionální psí kadeřník a grooming salon v Ostravě-Hrabůvce. Stříhání, trimování, koupání psů a ozonová terapie. Individuální péče pro malá a střední plemena.",
         "vatID": "CZ29459206",
         "taxID": "29459206",
         "url": "https://www.dogatelier.cz/",
@@ -1837,6 +1851,10 @@
             "latitude": "49.8037",
             "longitude": "18.2648"
         },
+        "areaServed": {
+            "@type": "City",
+            "name": "Ostrava"
+        },
         "openingHoursSpecification": [
             {
                 "@type": "OpeningHoursSpecification",
@@ -1851,41 +1869,97 @@
         ],
         "hasOfferCatalog": {
             "@type": "OfferCatalog",
-            "name": "Grooming služby",
+            "name": "Grooming služby pro psy",
             "itemListElement": [
                 {
                     "@type": "Offer",
+                    "priceCurrency": "CZK",
+                    "price": "900",
                     "itemOffered": {
                         "@type": "Service",
-                        "name": "Kompletní grooming malá plemena",
-                        "description": "Koupání, sušení, stříhání, úprava drápků, čištění uší"
+                        "name": "Kompletní grooming a stříhání - malá plemena",
+                        "description": "Koupání, sušení, stříhání nebo trimování, úprava drápků, čištění uší pro psy do 10 kg"
                     }
                 },
                 {
                     "@type": "Offer",
+                    "priceCurrency": "CZK",
+                    "price": "1200",
                     "itemOffered": {
                         "@type": "Service",
-                        "name": "Kompletní grooming střední plemena",
-                        "description": "Koupání, sušení, stříhání, úprava drápků, čištění uší"
+                        "name": "Kompletní grooming a stříhání - střední plemena",
+                        "description": "Koupání, sušení, stříhání nebo trimování, úprava drápků, čištění uší pro psy 10-20 kg"
                     }
                 },
                 {
                     "@type": "Offer",
+                    "priceCurrency": "CZK",
+                    "price": "300",
                     "itemOffered": {
                         "@type": "Service",
-                        "name": "Ozonová terapie",
-                        "description": "Ozon Spa léčba pro zdravou srst"
+                        "name": "Ozonová terapie pro psy",
+                        "description": "Ozon Spa regenerační péče pro zdravou pokožku a krásnou srst"
                     }
                 }
             ]
         }
     }
     </script>
+
+    <!-- FAQPage Schema for better search visibility -->
+    <script type="application/ld+json">
+    {
+        "@context": "https://schema.org",
+        "@type": "FAQPage",
+        "mainEntity": [
+            {
+                "@type": "Question",
+                "name": "Kde se nachází psí kadeřník DogAtelier v Ostravě?",
+                "acceptedAnswer": {
+                    "@type": "Answer",
+                    "text": "DogAtelier se nachází na adrese Dr. Martínka 1166/69, 700 30 Ostrava-Hrabůvka. Parkování je dostupné na veřejném parkovišti Nová Klegova přímo za salonem."
+                }
+            },
+            {
+                "@type": "Question",
+                "name": "Jaké služby nabízí psí salon DogAtelier?",
+                "acceptedAnswer": {
+                    "@type": "Answer",
+                    "text": "Nabízíme kompletní grooming pro psy: stříhání, trimování, koupání a foukání, stříhání drápků, čištění uší a ozonovou terapii. Specializujeme se na malá a střední plemena."
+                }
+            },
+            {
+                "@type": "Question",
+                "name": "Kolik stojí stříhání psa v Ostravě?",
+                "acceptedAnswer": {
+                    "@type": "Answer",
+                    "text": "Cena stříhání závisí na velikosti psa: malá plemena (do 10 kg) od 900 Kč, střední plemena (10-20 kg) od 1 200 Kč. Cena zahrnuje koupání, foukání, stříhání, úpravu drápků a čištění uší."
+                }
+            },
+            {
+                "@type": "Question",
+                "name": "Jak si můžu rezervovat termín v psím salonu DogAtelier?",
+                "acceptedAnswer": {
+                    "@type": "Answer",
+                    "text": "Termín si můžete rezervovat online přímo na našem webu nebo telefonicky na čísle +420 736 477 981. Online rezervace je dostupná 24/7."
+                }
+            },
+            {
+                "@type": "Question",
+                "name": "Provádíte trimování psů v Ostravě?",
+                "acceptedAnswer": {
+                    "@type": "Answer",
+                    "text": "Ano, trimování je součástí našich standardních služeb. Trimování je vhodné zejména pro drsnosrsté a hrubosrsté plemena a provádíme ho ručně s ohledem na strukturu srsti."
+                }
+            }
+        ]
+    }
+    </script>
 </head>
 <body>
     <!-- Navigation -->
     <nav>
-        <a href="#" onclick="window.scrollTo({top: 0, behavior: 'smooth'}); return false;" class="nav-logo"><img src="logo.webp" alt="DogAtelier"></a>
+        <a href="#" onclick="window.scrollTo({top: 0, behavior: 'smooth'}); return false;" class="nav-logo"><img src="logo.webp" alt="DogAtelier - Psí kadeřník Ostrava"></a>
         <ul class="nav-links">
             <li><a href="#uvod">Úvod</a></li>
             <li><a href="#o-mne">O mně</a></li>
@@ -1907,11 +1981,11 @@
             <div class="hero-image-placeholder"></div>
         </div>
         <div class="hero-content">
-            <h1>DogAtelier</h1>
+            <h1>DogAtelier – Psí kadeřník a grooming salon Ostrava</h1>
             <p class="hero-location">Ostrava – Hrabůvka</p>
-            <p class="hero-subtitle">Profesionální péče</p>
+            <p class="hero-subtitle">Stříhání, trimování a koupání psů</p>
             <p class="hero-text">
-                Profesionální péče o psy v klidném a příjemném prostředí. Bez spěchu, s respektem k individualitě každého mazlíčka.
+                Profesionální psí kadeřník v Ostravě-Hrabůvce. Nabízíme stříhání, trimování a koupání psů v klidném prostředí s individuálním přístupem ke každému pejskovi.
             </p>
             <a href="#" class="btn-primary" onclick="openReservationModal(); return false;">Online rezervace termínu</a>
         </div>
@@ -1920,10 +1994,10 @@
     <!-- About Section - Combined V1 & V3 -->
     <section id="o-mne" class="about">
         <div class="about-image">
-            <img src="https://images.unsplash.com/photo-1587300003388-59208cc962cb?w=800&q=80&fit=crop" alt="Profesionální péče o psy">
+            <img src="https://images.unsplash.com/photo-1587300003388-59208cc962cb?w=800&q=80&fit=crop" alt="Profesionální stříhání a grooming psů v Ostravě - DogAtelier">
         </div>
         <div class="about-content">
-            <h2 class="section-title">Příběh, který dává smysl</h2>
+            <h2 class="section-title">O psím salonu v Ostravě-Hrabůvce</h2>
             <p class="about-quote">
                 „Mým cílem není odbavit co nejvíce zákazníků..."
             </p>
@@ -1944,7 +2018,7 @@
 
     <!-- Services Section - from Concept 2 -->
     <section id="sluzby" class="services">
-        <h2 class="section-title">Služby & Ceník</h2>
+        <h2 class="section-title">Stříhání a trimování psů v Ostravě – Ceník služeb</h2>
         <p class="services-subtitle">Kompletní péče přizpůsobená velikosti a potřebám vašeho pejska</p>
 
         <div class="pricing-cards">
@@ -2020,7 +2094,7 @@
     <!-- Ozone Spa Section -->
     <section id="ozon-spa" class="ozone-spa">
         <div class="ozone-inner">
-            <h2>Ozon Spa</h2>
+            <h2>Ozon Spa pro psy v Ostravě</h2>
             <p class="subtitle">Regenerační péče pro zdravou pokožku a krásnou srst</p>
             
             <div class="ozone-content">
@@ -2059,7 +2133,7 @@
 
     <!-- Gallery Section -->
     <section id="galerie" class="gallery">
-        <h2>Galerie</h2>
+        <h2>Galerie z našeho psího salonu</h2>
         <div class="gallery-carousel">
             <button class="gallery-nav gallery-nav-prev" onclick="slideGallery(-1)" aria-label="Predchozi">
                 <svg fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -2103,7 +2177,7 @@
 
     <!-- Contact Section - from Concept 3 -->
     <section id="kontakt" class="contact">
-        <h2>Kontakt</h2>
+        <h2>Kontakt – Psí kadeřník Ostrava-Hrabůvka</h2>
         <div class="contact-grid">
             <div class="contact-box">
                 <h4>Adresa salonu</h4>
