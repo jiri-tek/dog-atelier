@@ -7,7 +7,7 @@ const CONFIG = {
   SHEET_ID: '1wZ6okwr54P6OveK3kJWGVYXmNdYHzn2X1k8_roP6Nr4',
   CALENDAR_ID: 'dogatelierostrava@gmail.com',
   ADMIN_EMAILS: ['dogatelierostrava@gmail.com', 'staffa.ppc@gmail.com'],
-  RESERVATIONS_SHEET: 'List 1',
+  RESERVATIONS_SHEET: 'Rezervace',
   GALLERY_SHEET: 'Galerie'
 };
 

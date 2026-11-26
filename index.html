@@ -1439,6 +1439,21 @@
             border-radius: 4px;
         }
 
+        .btn-retry {
+            margin-top: 0.5rem;
+            padding: 0.5rem 1rem;
+            background: var(--color-primary);
+            color: white;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 0.9rem;
+        }
+
+        .btn-retry:hover {
+            background: var(--color-secondary);
+        }
+
         /* Submit Button */
         .btn-submit {
             display: block;
@@ -2344,6 +2359,10 @@
                             <div id="loadingSlots" class="no-slots-message" style="display: none;">
                                 <span class="loading-spinner"></span> Načítám dostupné termíny...
                             </div>
+                            <div id="loadingError" class="no-slots-message" style="display: none;">
+                                <p>Nepodařilo se načíst termíny.</p>
+                                <button type="button" onclick="retryLoadSlots()" class="btn-retry">Zkusit znovu</button>
+                            </div>
                         </div>
                     </div>
 
@@ -2371,11 +2390,19 @@
     let currentYear = new Date().getFullYear();
     let selectedDate = null;
     let selectedSlot = null;
+    let isLoadingSlots = false; // Prevent multiple simultaneous loads
 
     // ============ MODAL FUNCTIONS ============
     function openReservationModal() {
-        document.getElementById('reservationModal').classList.add('active');
+        const modal = document.getElementById('reservationModal');
+        if (!modal) {
+            console.error('Reservation modal not found');
+            return;
+        }
+        modal.classList.add('active');
         document.body.style.overflow = 'hidden';
+
+        // Always load slots when opening modal
         loadAvailableSlots();
     }
 
@@ -2401,24 +2428,57 @@
 
     // ============ API FUNCTIONS ============
     async function loadAvailableSlots() {
-        document.getElementById('loadingSlots').style.display = 'block';
+        // Prevent multiple simultaneous loads
+        if (isLoadingSlots) {
+            console.log('Already loading slots, skipping...');
+            return;
+        }
+
+        isLoadingSlots = true;
+        const loadingEl = document.getElementById('loadingSlots');
+        const errorEl = document.getElementById('loadingError');
+        const timeSlotsEl = document.getElementById('timeSlots');
+
+        // Show loading indicator, hide error
+        if (loadingEl) loadingEl.style.display = 'block';
+        if (errorEl) errorEl.style.display = 'none';
+        if (timeSlotsEl) timeSlotsEl.innerHTML = '';
 
         try {
-            const response = await fetch(APPS_SCRIPT_URL + '?action=getSlots');
+            console.log('Fetching available slots from:', APPS_SCRIPT_URL);
+            const response = await fetch(APPS_SCRIPT_URL + '?action=getSlots', {
+                method: 'GET',
+                mode: 'cors'
+            });
+
+            if (!response.ok) {
+                throw new Error('HTTP error: ' + response.status);
+            }
+
             const data = await response.json();
+            console.log('Slots loaded:', data);
 
             if (data.success) {
-                availableSlots = data.slots;
+                availableSlots = data.slots || [];
                 renderCalendar();
+                if (loadingEl) loadingEl.style.display = 'none';
+                if (errorEl) errorEl.style.display = 'none';
             } else {
-                showMessage('Nepodařilo se načíst dostupné termíny: ' + data.error, 'error');
+                console.error('API error:', data.error);
+                if (loadingEl) loadingEl.style.display = 'none';
+                if (errorEl) errorEl.style.display = 'block';
             }
         } catch (error) {
             console.error('Error loading slots:', error);
-            showMessage('Nepodařilo se načíst dostupné termíny. Zkuste to prosím později.', 'error');
+            if (loadingEl) loadingEl.style.display = 'none';
+            if (errorEl) errorEl.style.display = 'block';
+        } finally {
+            isLoadingSlots = false;
         }
+    }
 
-        document.getElementById('loadingSlots').style.display = 'none';
+    function retryLoadSlots() {
+        loadAvailableSlots();
     }
 
     // ============ CALENDAR FUNCTIONS ============
@@ -3382,7 +3442,7 @@
     </script>
 
     <!-- Sticky Reservation Button -->
-    <a href="#kontakt" class="sticky-cta" onclick="document.getElementById('reservationModal').classList.add('active'); return false;">
+    <a href="#kontakt" class="sticky-cta" onclick="openReservationModal(); return false;">
         <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
         </svg>

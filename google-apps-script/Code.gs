@@ -253,6 +253,9 @@ function getAvailableSlots() {
   const slots = [];
   const now = new Date();
 
+  // Minimum booking time: 24 hours from now
+  const minBookingTime = new Date(now.getTime() + 24 * 60 * 60 * 1000);
+
   // Start from tomorrow
   const startDate = new Date(now);
   startDate.setDate(startDate.getDate() + 1);
@@ -301,6 +304,11 @@ function getAvailableSlots() {
 
       const slotStart = new Date(d);
       slotStart.setHours(hour, 0, 0, 0);
+
+      // Skip slots that are less than 24 hours from now
+      if (slotStart.getTime() < minBookingTime.getTime()) {
+        return;
+      }
 
       const slotEnd = new Date(slotStart.getTime() + settings.slotDuration * 60000);
 
@@ -615,12 +623,12 @@ function setupClosedDaysSheet() {
   closedSheet.getRange(1, 1, 1, headers.length).setBackground('#7A8D80');
   closedSheet.getRange(1, 1, 1, headers.length).setFontColor('white');
 
-  // Generate dates until end of year (skip weekends)
+  // Generate dates until end of next year (skip weekends)
   const today = new Date();
-  const endOfYear = new Date(today.getFullYear(), 11, 31);
+  const endOfNextYear = new Date(today.getFullYear() + 1, 11, 31);
   const rows = [];
 
-  for (let d = new Date(today); d <= endOfYear; d.setDate(d.getDate() + 1)) {
+  for (let d = new Date(today); d <= endOfNextYear; d.setDate(d.getDate() + 1)) {
     const date = new Date(d);
     const dayOfWeek = date.getDay();
 
@@ -702,12 +710,13 @@ function refreshClosedDaysSheet() {
   // Find the last row with data
   let lastRow = closedSheet.getLastRow();
 
-  // Add new dates until end of year (skip weekends)
+  // Add new dates from start of current year until end of next year (skip weekends)
   const today = new Date();
-  const endOfYear = new Date(today.getFullYear(), 11, 31);
+  const startOfYear = new Date(today.getFullYear(), 0, 1); // Jan 1 of current year
+  const endOfNextYear = new Date(today.getFullYear() + 1, 11, 31);
   const newRows = [];
 
-  for (let d = new Date(today); d <= endOfYear; d.setDate(d.getDate() + 1)) {
+  for (let d = new Date(startOfYear); d <= endOfNextYear; d.setDate(d.getDate() + 1)) {
     const date = new Date(d);
     const dayOfWeek = date.getDay();
 
@@ -761,17 +770,14 @@ function getClosedSlots() {
   const headers = data[0];
 
   // Find time column indices (starting from column 4)
-  // Headers might be Date objects (representing times) or strings like "9:00"
   const timeColumns = [];
   for (let c = 3; c < headers.length; c++) {
     let hour;
     const headerVal = headers[c];
 
     if (headerVal instanceof Date) {
-      // Extract hour from Date object (e.g., 1899-12-30T08:00:00 → 9)
       hour = headerVal.getHours();
     } else {
-      // Parse from string like "9:00"
       const timeStr = headerVal.toString();
       hour = parseInt(timeStr.split(':')[0]);
     }
@@ -827,7 +833,6 @@ function getClosedSlots() {
 
 /**
  * Sync closed days to Google Calendar
- * Creates "Dovolená" events for checked dates/times
  */
 function syncClosedToCalendar() {
   const calendar = CalendarApp.getCalendarById(CONFIG.CALENDAR_ID);
@@ -842,13 +847,11 @@ function syncClosedToCalendar() {
   let created = 0;
   let skipped = 0;
 
-  // Process full day closures
   closedData.closedDates.forEach(dateStr => {
     const date = new Date(dateStr);
     const nextDay = new Date(date);
     nextDay.setDate(nextDay.getDate() + 1);
 
-    // Check if event already exists
     const existingEvents = calendar.getEvents(date, nextDay);
     const hasHolidayEvent = existingEvents.some(e =>
       e.getTitle().includes('Dovolená') || e.getTitle().includes('Zavřeno')
@@ -864,7 +867,6 @@ function syncClosedToCalendar() {
     }
   });
 
-  // Process partial day closures
   Object.keys(closedData.closedSlots).forEach(dateStr => {
     const hours = closedData.closedSlots[dateStr];
     const date = new Date(dateStr);
@@ -875,7 +877,6 @@ function syncClosedToCalendar() {
 
       const endTime = new Date(startTime.getTime() + settings.slotDuration * 60000);
 
-      // Check if event already exists
       const existingEvents = calendar.getEvents(startTime, endTime);
       const hasHolidayEvent = existingEvents.some(e =>
         e.getTitle().includes('Dovolená') || e.getTitle().includes('Zavřeno')
@@ -897,7 +898,6 @@ function syncClosedToCalendar() {
 
 /**
  * Remove all "Dovolená" and "Zavřeno" events created by this script
- * Use this to clean up and resync
  */
 function clearClosedCalendarEvents() {
   const calendar = CalendarApp.getCalendarById(CONFIG.CALENDAR_ID);
@@ -928,13 +928,11 @@ function clearClosedCalendarEvents() {
 
 /**
  * Automatic trigger - syncs calendar when checkbox is changed
- * SETUP: Run setupOnEditTrigger() once to install this trigger
  */
 function onZavrenoEdit(e) {
   try {
     const sheet = e.source.getActiveSheet();
 
-    // Only process edits on "Zavřeno" sheet
     if (sheet.getName() !== 'Zavřeno') {
       return;
     }
@@ -943,7 +941,6 @@ function onZavrenoEdit(e) {
     const row = range.getRow();
     const col = range.getColumn();
 
-    // Only process checkbox columns (3 = Celý den, 4+ = time slots)
     if (row < 2 || col < 3) {
       return;
     }
@@ -956,7 +953,6 @@ function onZavrenoEdit(e) {
     const settings = getSettings();
     const headers = sheet.getRange(1, 1, 1, sheet.getLastColumn()).getValues()[0];
 
-    // Get date from column A
     const dateValue = sheet.getRange(row, 1).getValue();
     let date;
 
@@ -975,12 +971,10 @@ function onZavrenoEdit(e) {
     const isCelyDen = col === 3;
 
     if (isCelyDen) {
-      // Full day toggle
       const nextDay = new Date(date);
       nextDay.setDate(nextDay.getDate() + 1);
 
       if (isChecked) {
-        // Create all-day event
         const existingEvents = calendar.getEvents(date, nextDay);
         const hasEvent = existingEvents.some(ev =>
           ev.getTitle().includes('Dovolená') &&
@@ -993,7 +987,6 @@ function onZavrenoEdit(e) {
           });
         }
       } else {
-        // Remove all-day event
         const events = calendar.getEvents(date, nextDay);
         events.forEach(ev => {
           if (ev.getTitle().includes('Dovolená') &&
@@ -1003,7 +996,6 @@ function onZavrenoEdit(e) {
         });
       }
     } else {
-      // Specific time slot toggle
       const timeStr = headers[col - 1];
       const hour = parseInt(timeStr.toString().split(':')[0]);
 
@@ -1014,7 +1006,6 @@ function onZavrenoEdit(e) {
       const endTime = new Date(startTime.getTime() + settings.slotDuration * 60000);
 
       if (isChecked) {
-        // Create time-specific event
         const existingEvents = calendar.getEvents(startTime, endTime);
         const hasEvent = existingEvents.some(ev =>
           ev.getTitle().includes('Zavřeno') &&
@@ -1027,7 +1018,6 @@ function onZavrenoEdit(e) {
           });
         }
       } else {
-        // Remove time-specific event
         const events = calendar.getEvents(startTime, endTime);
         events.forEach(ev => {
           if (ev.getTitle().includes('Zavřeno') &&
@@ -1044,10 +1034,8 @@ function onZavrenoEdit(e) {
 
 /**
  * Install the onEdit trigger for automatic calendar sync
- * Run this function ONCE to set up automatic sync
  */
 function setupOnEditTrigger() {
-  // Remove existing triggers for this function
   const triggers = ScriptApp.getProjectTriggers();
   triggers.forEach(trigger => {
     if (trigger.getHandlerFunction() === 'onZavrenoEdit') {
@@ -1055,7 +1043,6 @@ function setupOnEditTrigger() {
     }
   });
 
-  // Create new trigger
   ScriptApp.newTrigger('onZavrenoEdit')
     .forSpreadsheet(CONFIG.SHEET_ID)
     .onEdit()
@@ -1066,13 +1053,9 @@ function setupOnEditTrigger() {
 
 // ============ TEST FUNCTIONS ============
 
-/**
- * Test function - run this to verify setup
- */
 function testSetup() {
   console.log('Testing DogAtelier Reservation System...');
 
-  // Test Calendar access
   try {
     const calendar = CalendarApp.getCalendarById(CONFIG.CALENDAR_ID);
     if (calendar) {
@@ -1084,7 +1067,6 @@ function testSetup() {
     console.log('✗ Calendar error: ' + e.message);
   }
 
-  // Test Sheet access
   try {
     const sheet = SpreadsheetApp.openById(CONFIG.SHEET_ID);
     console.log('✓ Sheet access OK: ' + sheet.getName());
@@ -1092,7 +1074,6 @@ function testSetup() {
     console.log('✗ Sheet error: ' + e.message);
   }
 
-  // Test settings
   try {
     const settings = getSettings();
     console.log('✓ Settings loaded:');
@@ -1103,7 +1084,6 @@ function testSetup() {
     console.log('✗ Settings error: ' + e.message);
   }
 
-  // Test available slots
   try {
     const slots = getAvailableSlots();
     console.log('✓ Found ' + slots.length + ' available slots');
@@ -1117,47 +1097,7 @@ function testSetup() {
   console.log('Test complete!');
 }
 
-/**
- * Test function to debug closed slots - DETAILED
- */
 function testClosedSlots() {
-  const spreadsheet = SpreadsheetApp.openById(CONFIG.SHEET_ID);
-  const closedSheet = spreadsheet.getSheetByName('Zavřeno');
-
-  if (!closedSheet) {
-    console.log('ERROR: Sheet "Zavřeno" not found!');
-    return;
-  }
-
-  const data = closedSheet.getDataRange().getValues();
-  console.log('=== RAW DATA DEBUG ===');
-  console.log('Total rows:', data.length);
-  console.log('Headers:', JSON.stringify(data[0]));
-
-  // Show first 5 data rows
-  for (let i = 1; i < Math.min(6, data.length); i++) {
-    const row = data[i];
-    console.log('Row ' + i + ': Date=' + row[0] + ', Day=' + row[1] + ', CelýDen=' + row[2] + ' (type:' + typeof row[2] + '), 9:00=' + row[3] + ' (type:' + typeof row[3] + '), 12:00=' + row[4] + ', 15:00=' + row[5]);
-  }
-
-  // Find row with 4.8
-  for (let i = 1; i < data.length; i++) {
-    const row = data[i];
-    const dateStr = row[0].toString();
-    if (dateStr.includes('4.8') || dateStr.includes('4. 8')) {
-      console.log('=== FOUND 4.8 ROW ===');
-      console.log('Row index:', i);
-      console.log('Full row data:', JSON.stringify(row));
-      console.log('Column 3 (9:00) value:', row[3], 'type:', typeof row[3]);
-      console.log('Is true?', row[3] === true);
-      console.log('Is "TRUE"?', row[3] === 'TRUE');
-      console.log('Is 1?', row[3] === 1);
-      console.log('Boolean cast:', Boolean(row[3]));
-    }
-  }
-
-  // Now test the actual function
-  console.log('=== CALLING getClosedSlots() ===');
   const closedData = getClosedSlots();
   console.log('Full day closures:', JSON.stringify(closedData.closedDates));
   console.log('Partial closures:', JSON.stringify(closedData.closedSlots));
