@@ -1314,9 +1314,10 @@
             console.log('confirmCancel: Starting cancel for eventId:', currentCancelId);
 
             try {
-                console.log('confirmCancel: Sending DELETE request to /api/reservations');
-                const response = await fetch('/api/reservations', {
-                    method: 'DELETE',
+                // Use POST with action parameter (more reliable than DELETE with body)
+                console.log('confirmCancel: Sending POST cancel request to /api/reservations/cancel');
+                const response = await fetch('/api/reservations/cancel', {
+                    method: 'POST',
                     headers: {
                         'Authorization': `Bearer ${token}`,
                         'Content-Type': 'application/json'

@@ -1142,3 +1142,61 @@ function initialSetup() {
   setupCalendarSync(); // Auto-setup calendar sync
   Logger.log('Setup complete!');
 }
+
+// ============ TEST FUNCTIONS ============
+/**
+ * Test function - run this to test email sending
+ * Shows what would be extracted from calendar events
+ */
+function testCancelEmail() {
+  const calendar = CalendarApp.getCalendarById(CONFIG.CALENDAR_ID);
+  if (!calendar) {
+    Logger.log('Calendar not found!');
+    return;
+  }
+
+  // Get events from next 30 days
+  const now = new Date();
+  const future = new Date(now.getTime() + 30 * 24 * 60 * 60 * 1000);
+  const events = calendar.getEvents(now, future);
+
+  Logger.log('Found ' + events.length + ' events');
+
+  if (events.length > 0) {
+    const event = events[0]; // Take first event
+    const title = event.getTitle();
+    const description = event.getDescription() || '';
+    const startTime = event.getStartTime();
+
+    Logger.log('=== Event: ' + title + ' ===');
+    Logger.log('Description: ' + description);
+    Logger.log('Start: ' + startTime);
+
+    // Parse email
+    let email = '';
+    const lines = description.split('\n');
+    for (const line of lines) {
+      Logger.log('Line: ' + line);
+      if (line.includes('Email:') || line.includes('email:')) {
+        email = line.replace(/[Ee]mail:\s*/g, '').trim();
+        Logger.log('Found email via line match: ' + email);
+        break;
+      }
+    }
+
+    // Fallback regex
+    if (!email) {
+      const emailMatch = description.match(/[\w.-]+@[\w.-]+\.\w+/);
+      if (emailMatch) {
+        email = emailMatch[0];
+        Logger.log('Found email via regex: ' + email);
+      }
+    }
+
+    if (email) {
+      Logger.log('=== Would send email to: ' + email + ' ===');
+    } else {
+      Logger.log('=== NO EMAIL FOUND ===');
+    }
+  }
+}
