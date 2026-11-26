@@ -435,7 +435,22 @@ function updateReservation(data) {
 function cancelReservation(eventId) {
   if (!eventId) return { success: false, message: 'Missing eventId' };
 
-  const sheet = SpreadsheetApp.openById(CONFIG.SHEET_ID).getSheetByName(CONFIG.RESERVATIONS_SHEET);
+  const spreadsheet = SpreadsheetApp.openById(CONFIG.SHEET_ID);
+  let sheet = spreadsheet.getSheetByName(CONFIG.RESERVATIONS_SHEET);
+
+  // Fallback: try 'List 1' if 'Rezervace' doesn't exist
+  if (!sheet) {
+    sheet = spreadsheet.getSheetByName('List 1');
+  }
+  // Fallback: use first sheet
+  if (!sheet) {
+    sheet = spreadsheet.getSheets()[0];
+  }
+
+  if (!sheet) {
+    return { success: false, message: 'Sheet not found' };
+  }
+
   const data = sheet.getDataRange().getValues();
   const headers = data[0];
 
