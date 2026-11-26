@@ -1306,9 +1306,15 @@
         }
 
         async function confirmCancel() {
-            if (!currentCancelId) return;
+            if (!currentCancelId) {
+                console.error('confirmCancel: No currentCancelId!');
+                return;
+            }
+
+            console.log('confirmCancel: Starting cancel for eventId:', currentCancelId);
 
             try {
+                console.log('confirmCancel: Sending DELETE request to /api/reservations');
                 const response = await fetch('/api/reservations', {
                     method: 'DELETE',
                     headers: {
@@ -1318,17 +1324,21 @@
                     body: JSON.stringify({ eventId: currentCancelId })
                 });
 
+                console.log('confirmCancel: Response status:', response.status);
                 const data = await response.json();
+                console.log('confirmCancel: Response data:', data);
 
                 if (data.success) {
                     cache.clear('reservations');
                     closeCancelModal();
+                    alert('Rezervace zrusena! Email byl odeslan zakaznikovi.');
                     loadReservations(true);
                 } else {
                     alert('Chyba: ' + (data.message || 'Nepodarilo se zrusit rezervaci'));
                 }
             } catch (error) {
-                alert('Chyba pripojeni');
+                console.error('confirmCancel: Error:', error);
+                alert('Chyba pripojeni: ' + error.message);
             }
         }
 

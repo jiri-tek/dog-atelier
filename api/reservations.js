@@ -29,12 +29,15 @@ function verifyToken(token, secret) {
 }
 
 module.exports = async function handler(req, res) {
+    console.log('Reservations API called:', req.method, req.url);
+
     // CORS headers
     res.setHeader('Access-Control-Allow-Origin', '*');
     res.setHeader('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
     res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization');
 
     if (req.method === 'OPTIONS') {
+        console.log('OPTIONS preflight request');
         return res.status(200).end();
     }
 
@@ -125,11 +128,16 @@ module.exports = async function handler(req, res) {
 
         // DELETE - Cancel reservation
         if (req.method === 'DELETE') {
+            console.log('DELETE request received, body:', JSON.stringify(req.body));
             const { eventId } = req.body || {};
 
             if (!eventId) {
+                console.log('DELETE: Missing eventId');
                 return res.status(400).json({ success: false, message: 'Missing eventId' });
             }
+
+            console.log('DELETE: Cancelling reservation with eventId:', eventId);
+            console.log('DELETE: Sending to Apps Script URL:', adminScriptUrl);
 
             const response = await fetch(adminScriptUrl, {
                 method: 'POST',
@@ -142,6 +150,7 @@ module.exports = async function handler(req, res) {
             });
 
             const data = await response.json();
+            console.log('DELETE: Apps Script response:', JSON.stringify(data));
             return res.status(200).json(data);
         }
 
