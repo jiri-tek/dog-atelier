@@ -455,15 +455,23 @@ function cancelReservation(eventId) {
         const titleParts = title.split(' - ');
         const nameParts = (titleParts[1] || '').split(' ');
 
-        // Parse email from description
+        // Parse email from description (try multiple patterns)
         let email = '';
         const lines = description.split('\n');
         for (const line of lines) {
-          if (line.startsWith('Email:')) {
-            email = line.replace('Email:', '').trim();
+          if (line.includes('Email:') || line.includes('email:')) {
+            email = line.replace(/[Ee]mail:\s*/g, '').trim();
             break;
           }
         }
+        // Fallback: try to find email with regex
+        if (!email) {
+          const emailMatch = description.match(/[\w.-]+@[\w.-]+\.\w+/);
+          if (emailMatch) {
+            email = emailMatch[0];
+          }
+        }
+        console.log('Extracted email:', email, 'from description:', description.substring(0, 100));
 
         reservation = {
           firstName: nameParts[0] || '',
