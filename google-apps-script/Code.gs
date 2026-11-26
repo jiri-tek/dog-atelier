@@ -25,17 +25,17 @@ const CONFIG = {
   // Default slot duration in minutes (used for calendar event length)
   SLOT_DURATION: 150,  // 2.5 hours
 
-  // Show slots until end of year (calculated dynamically)
-  DAYS_AHEAD: calculateDaysUntilEndOfYear()
+  // Show slots until end of next year (calculated dynamically)
+  DAYS_AHEAD: calculateDaysUntilEndOfNextYear()
 };
 
 /**
- * Calculate days until end of current year
+ * Calculate days until end of next year
  */
-function calculateDaysUntilEndOfYear() {
+function calculateDaysUntilEndOfNextYear() {
   const now = new Date();
-  const endOfYear = new Date(now.getFullYear(), 11, 31); // Dec 31
-  const diffTime = endOfYear.getTime() - now.getTime();
+  const endOfNextYear = new Date(now.getFullYear() + 1, 11, 31); // Dec 31 next year
+  const diffTime = endOfNextYear.getTime() - now.getTime();
   const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
   return Math.max(diffDays, 30); // At least 30 days
 }
