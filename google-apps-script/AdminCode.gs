@@ -435,74 +435,116 @@ function updateReservation(data) {
 function cancelReservation(eventId) {
   if (!eventId) return { success: false, message: 'Missing eventId' };
 
-  const spreadsheet = SpreadsheetApp.openById(CONFIG.SHEET_ID);
-  let sheet = spreadsheet.getSheetByName(CONFIG.RESERVATIONS_SHEET);
-
-  // Fallback: try 'List 1' if 'Rezervace' doesn't exist
-  if (!sheet) {
-    sheet = spreadsheet.getSheetByName('List 1');
-  }
-  // Fallback: use first sheet
-  if (!sheet) {
-    sheet = spreadsheet.getSheets()[0];
-  }
-
-  if (!sheet) {
-    return { success: false, message: 'Sheet not found' };
-  }
-
-  const data = sheet.getDataRange().getValues();
-  const headers = data[0];
-
-  const eventIdCol = headers.indexOf('Event ID');
-  const statusCol = headers.indexOf('Status');
-
-  let rowIndex = -1;
+  let calendarDeleted = false;
+  let sheetUpdated = false;
+  let emailSent = false;
   let reservation = null;
 
-  for (let i = 1; i < data.length; i++) {
-    if (data[i][eventIdCol] === eventId) {
-      rowIndex = i + 1;
-      reservation = {
-        firstName: data[i][headers.indexOf('Jméno') !== -1 ? headers.indexOf('Jméno') : headers.indexOf('Jmeno')],
-        lastName: data[i][headers.indexOf('Příjmení') !== -1 ? headers.indexOf('Příjmení') : headers.indexOf('Prijmeni')],
-        email: data[i][headers.indexOf('Email')],
-        date: data[i][headers.indexOf('Datum')],
-        time: data[i][headers.indexOf('Čas') !== -1 ? headers.indexOf('Čas') : headers.indexOf('Cas')],
-        service: data[i][headers.indexOf('Služba') !== -1 ? headers.indexOf('Služba') : headers.indexOf('Sluzba')]
-      };
-      break;
-    }
-  }
-
-  if (rowIndex === -1) return { success: false, message: 'Reservation not found' };
-
+  // 1. First, delete from Google Calendar (this is the main action)
   try {
     const calendar = CalendarApp.getCalendarById(CONFIG.CALENDAR_ID);
     if (calendar) {
-      try {
-        const event = calendar.getEventById(eventId);
-        if (event) event.deleteEvent();
-      } catch (e) {
-        console.log('Calendar event not found or already deleted:', e);
+      const event = calendar.getEventById(eventId);
+      if (event) {
+        // Extract info from calendar event for email
+        const title = event.getTitle();
+        const startTime = event.getStartTime();
+        const description = event.getDescription() || '';
+
+        // Parse name from title (format: "Service - FirstName LastName")
+        const titleParts = title.split(' - ');
+        const nameParts = (titleParts[1] || '').split(' ');
+
+        // Parse email from description
+        let email = '';
+        const lines = description.split('\n');
+        for (const line of lines) {
+          if (line.startsWith('Email:')) {
+            email = line.replace('Email:', '').trim();
+            break;
+          }
+        }
+
+        reservation = {
+          firstName: nameParts[0] || '',
+          lastName: nameParts.slice(1).join(' ') || '',
+          email: email,
+          date: Utilities.formatDate(startTime, 'Europe/Prague', 'd.M.yyyy'),
+          time: Utilities.formatDate(startTime, 'Europe/Prague', 'H:mm'),
+          service: titleParts[0] || ''
+        };
+
+        event.deleteEvent();
+        calendarDeleted = true;
       }
     }
+  } catch (e) {
+    console.log('Calendar error:', e);
+  }
 
-    if (statusCol !== -1) {
-      sheet.getRange(rowIndex, statusCol + 1).setValue('cancelled');
-    } else {
-      const lastCol = headers.length + 1;
-      sheet.getRange(1, lastCol).setValue('Status');
-      sheet.getRange(rowIndex, lastCol).setValue('cancelled');
+  // 2. Try to update sheet (optional - might not exist)
+  try {
+    const spreadsheet = SpreadsheetApp.openById(CONFIG.SHEET_ID);
+    let sheet = spreadsheet.getSheetByName(CONFIG.RESERVATIONS_SHEET);
+    if (!sheet) sheet = spreadsheet.getSheetByName('List 1');
+    if (!sheet) sheet = spreadsheet.getSheets()[0];
+
+    if (sheet) {
+      const data = sheet.getDataRange().getValues();
+      const headers = data[0];
+      const eventIdCol = headers.indexOf('Event ID');
+      const statusCol = headers.indexOf('Status');
+
+      if (eventIdCol !== -1) {
+        for (let i = 1; i < data.length; i++) {
+          if (data[i][eventIdCol] === eventId) {
+            const rowIndex = i + 1;
+
+            // Get reservation info from sheet if not from calendar
+            if (!reservation || !reservation.email) {
+              reservation = {
+                firstName: data[i][headers.indexOf('Jméno') !== -1 ? headers.indexOf('Jméno') : headers.indexOf('Jmeno')] || '',
+                lastName: data[i][headers.indexOf('Příjmení') !== -1 ? headers.indexOf('Příjmení') : headers.indexOf('Prijmeni')] || '',
+                email: data[i][headers.indexOf('Email')] || '',
+                date: data[i][headers.indexOf('Datum')] || '',
+                time: data[i][headers.indexOf('Čas') !== -1 ? headers.indexOf('Čas') : headers.indexOf('Cas')] || '',
+                service: data[i][headers.indexOf('Služba') !== -1 ? headers.indexOf('Služba') : headers.indexOf('Sluzba')] || ''
+              };
+            }
+
+            // Mark as cancelled
+            if (statusCol !== -1) {
+              sheet.getRange(rowIndex, statusCol + 1).setValue('cancelled');
+            } else {
+              const lastCol = headers.length + 1;
+              sheet.getRange(1, lastCol).setValue('Status');
+              sheet.getRange(rowIndex, lastCol).setValue('cancelled');
+            }
+            sheetUpdated = true;
+            break;
+          }
+        }
+      }
     }
+  } catch (e) {
+    console.log('Sheet error:', e);
+  }
 
-    if (reservation && reservation.email) {
+  // 3. Send cancellation email
+  if (reservation && reservation.email) {
+    try {
       sendCancellationEmail(reservation);
+      emailSent = true;
+    } catch (e) {
+      console.log('Email error:', e);
     }
+  }
 
-    return { success: true, message: 'Reservation cancelled' };
-  } catch (error) {
-    return { success: false, message: error.toString() };
+  // Return success if calendar was deleted (main action)
+  if (calendarDeleted) {
+    return { success: true, message: 'Rezervace zrušena' + (emailSent ? ', email odeslán' : '') };
+  } else {
+    return { success: false, message: 'Event v kalendáři nenalezen' };
   }
 }
 
